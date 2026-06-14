@@ -1,26 +1,299 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg-deep: #0f172a;
+  --bg-mid: #1e293b;
+  --bg-card: rgba(30, 41, 59, 0.72);
+  --bg-elevated: rgba(51, 65, 85, 0.5);
+
+  /* هوية الشركة — للشعار فقط */
+  --brand-bronze: #c9a066;
+  --brand-bronze-light: #e8c99a;
+  --brand-bronze-dark: #8b6538;
+  --brand-bronze-glow: rgba(201, 160, 102, 0.35);
+  --glow-emerald: rgba(52, 211, 153, 0.3);
+  --glow-blue: rgba(59, 130, 246, 0.28);
+  --glow-amber: rgba(245, 158, 11, 0.28);
+  --glow-rose: rgba(244, 63, 94, 0.28);
+
+  /* معيار عالمي — واجهة وتفاعل */
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-muted: rgba(59, 130, 246, 0.15);
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #0ea5e9;
+
+  --rose: #f43f5e;
+  --text-primary: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg-deep);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-cairo);
+  --font-display: var(--font-outfit);
+  --color-brand: #c9a066;
+  --color-brand-light: #e8c99a;
+  --color-brand-dark: #8b6538;
+  --color-brand-muted: #a67c52;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-cairo), system-ui, sans-serif;
+  min-height: 100vh;
+}
+
+/* خلفية محايدة — بدون تدرجات برونزية */
+.mesh-bg {
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(59, 130, 246, 0.06), transparent 50%),
+    radial-gradient(ellipse 60% 50% at 90% 10%, rgba(14, 165, 233, 0.04), transparent 50%),
+    linear-gradient(160deg, #0f172a 0%, #111827 50%, #0f172a 100%);
+}
+
+.login-panel-bg {
+  background:
+    radial-gradient(ellipse 70% 50% at 80% 10%, rgba(59, 130, 246, 0.08), transparent 55%),
+    linear-gradient(160deg, #0f172a 0%, #111827 50%, #0f172a 100%);
+}
+
+.spinner-brand {
+  color: var(--primary);
+}
+
+/* روابط — معيار ERP */
+.erp-link {
+  color: #60a5fa;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+.erp-link:hover {
+  color: #93c5fd;
+  text-decoration: underline;
+}
+
+/* المبالغ — دلالية */
+.text-money-default {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.text-money-positive {
+  color: #34d399;
+  font-weight: 600;
+}
+
+.text-money-negative {
+  color: var(--rose);
+  font-weight: 600;
+}
+
+.text-money-muted {
+  color: #94a3b8;
+}
+
+.text-money-in { color: #f1f5f9; font-weight: 600; }
+.text-money-out { color: var(--rose); font-weight: 600; }
+.text-money-info { color: #94a3b8; }
+
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+}
+
+.glass-card:hover {
+  border-color: rgba(201, 160, 102, 0.35);
+  box-shadow:
+    0 8px 32px rgba(201, 160, 102, 0.14),
+    0 0 24px rgba(201, 160, 102, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.glow-bronze {
+  box-shadow: 0 0 24px var(--brand-bronze-glow);
+}
+
+.erp-stat-card {
+  border-radius: 0.75rem;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s ease,
+    background 0.3s ease;
+}
+
+.erp-stat-card:hover {
+  transform: translateY(-2px);
+}
+
+/* توهج عند المرور — بطاقات وصفوف تفاعلية */
+.erp-interactive {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    background-color 0.3s ease,
+    transform 0.3s ease;
+}
+
+.erp-interactive:hover {
+  border-color: rgba(201, 160, 102, 0.35);
+  background-color: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 4px 20px rgba(201, 160, 102, 0.12),
+    0 0 28px rgba(201, 160, 102, 0.1);
+  transform: translateY(-2px);
+}
+
+.erp-interactive:hover .progress-bar-fill {
+  box-shadow: 0 0 14px rgba(52, 211, 153, 0.55);
+}
+
+.erp-glow-emerald:hover {
+  border-color: rgba(52, 211, 153, 0.35);
+  box-shadow: 0 4px 24px var(--glow-emerald), 0 0 20px rgba(52, 211, 153, 0.12);
+}
+
+.erp-glow-blue:hover {
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 0 4px 24px var(--glow-blue), 0 0 20px rgba(59, 130, 246, 0.12);
+}
+
+.erp-glow-amber:hover {
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 4px 24px var(--glow-amber), 0 0 20px rgba(245, 158, 11, 0.12);
+}
+
+.erp-glow-rose:hover {
+  border-color: rgba(244, 63, 94, 0.35);
+  box-shadow: 0 4px 24px var(--glow-rose), 0 0 20px rgba(244, 63, 94, 0.12);
+}
+
+.erp-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.erp-panel:hover {
+  border-color: rgba(201, 160, 102, 0.28);
+  box-shadow:
+    0 8px 32px rgba(201, 160, 102, 0.1),
+    0 0 20px rgba(201, 160, 102, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.erp-link-brand {
+  color: var(--brand-bronze);
+  font-weight: 500;
+  transition: color 0.2s, text-shadow 0.2s;
+}
+
+.erp-link-brand:hover {
+  color: var(--brand-bronze-light);
+  text-shadow: 0 0 12px rgba(201, 160, 102, 0.45);
+  text-decoration: underline;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--brand-bronze-light), var(--brand-bronze), var(--brand-bronze-dark));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #059669, #34d399, #3b82f6);
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.35);
+  transition: width 0.6s ease, box-shadow 0.3s ease;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 999px;
+}
+
+.erp-select,
+select {
+  color-scheme: dark;
+}
+
+.erp-select option,
+select option {
+  background-color: #1e293b;
+  color: #f1f5f9;
+}
+
+.erp-select option:checked,
+select option:checked {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+/* جداول متجاوبة */
+.erp-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.erp-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .erp-page-header {
+    margin-bottom: 2rem;
+  }
 }
