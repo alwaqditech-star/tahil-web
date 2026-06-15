@@ -172,11 +172,49 @@ export type NotificationItem = {
   id: number; title: string; message: string; type: string; link?: string; isRead: boolean; createdAt: string;
 };
 
+export type FinancialReport = {
+  filters: { projectId: number | null; projectName: string | null; scope: "all" | "project" };
+  summary: {
+    totalRevenue: number; totalExpenses: number; totalProfit: number; profitMargin: number;
+    totalExtracts: number; totalPurchases: number; approvedExpensesOnly: number;
+  };
+  monthlyCashFlow: Array<{ month: number; monthLabel: string; revenue: number; expenses: number }>;
+  expensesByCategory: Array<{ category: string; amount: number; percent: number; color: string }>;
+  projects: Array<{
+    id: number; name: string; client: string; status: string; contractValue: number;
+    expenses: number; extracts: number; purchases: number; totalCosts: number;
+    profit: number; profitMargin: number; progressPercent: number;
+  }>;
+  contractors: Array<{ id: number; name: string; contractValue: number; paid: number; remaining: number }>;
+  suppliers: Array<{ id: number; name: string; category: string | null; purchases: number; paid: number; remaining: number }>;
+  expenseRows: Array<{
+    id: number; title: string; amount: number; category: string; status: string;
+    projectName: string; expenseDate: string; submittedBy: string;
+  }>;
+  extractRows: Array<{
+    id: number; title: string; amount: number; status: string; projectName: string;
+    contractorName: string; extractDate: string; extractNumber: string;
+  }>;
+  purchaseRows: Array<{
+    id: number; title: string; amount: number; paidAmount: number; status: string;
+    projectName: string; supplierName: string; orderDate: string; purchaseNumber: string;
+  }>;
+  pettyCashByEmployee: Array<{ userId: number; name: string; count: number; allocated: number; used: number; remaining: number }>;
+  pettyCashSummary: { totalAllocated: number; totalUsed: number; totalRemaining: number; transactionCount: number };
+  projectsList: Array<{ id: number; name: string }>;
+};
+
 export const api = {
   login: (u: string, p: string) => apiFetch<User & { token: string }>("/api/auth/login", { method: "POST", body: JSON.stringify({ username: u, password: p }) }),
   logout: (token: string) => apiFetch("/api/auth/logout", { method: "POST", token }),
   me: (token: string) => apiFetch<User>("/api/auth/me", { token }),
   dashboard: (token: string) => apiFetch<DashboardStats>("/api/reports/dashboard", { token }),
+  reports: {
+    financial: (token: string, projectId?: number | "all") => {
+      const q = projectId && projectId !== "all" ? `?projectId=${projectId}` : "";
+      return apiFetch<FinancialReport>(`/api/reports/financial${q}`, { token, timeoutMs: 60000 });
+    },
+  },
   expenseCategories: (token: string) => apiFetch<ExpenseCategory[]>("/api/expense-categories", { token }),
   upload: async (token: string, file: File) => {
     const fd = new FormData();
