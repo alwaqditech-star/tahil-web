@@ -1,32 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatCard } from "@/components/ui/stat-card";
 import { PanelCard } from "@/components/ui/panel-card";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type DashboardStats } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
-import { HardHat, TrendingUp, Loader2, CheckSquare, Clock } from "lucide-react";
+import { HardHat, TrendingUp, Loader2, CheckSquare, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
 export default function DashboardPage() {
   const { token } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadStats = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.dashboard(token);
+      setStats(data);
+    } catch (err) {
+      setStats(null);
+      setError(err instanceof Error ? err.message : "حدث خطأ في تحميل البيانات");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
 
   useEffect(() => {
-    if (!token) return;
-    api.dashboard(token)
-      .then(setStats)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [token]);
+    loadStats();
+  }, [loadStats]);
 
   if (loading) {
     return (
       <AppShell title="لوحة التحكم">
-        <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin spinner-brand" /></div>
+        <div className="flex flex-col items-center justify-center gap-3 py-20">
+          <Loader2 className="h-8 w-8 animate-spin spinner-brand" />
+          <p className="text-sm text-slate-500">جاري تحميل البيانات...</p>
+        </div>
       </AppShell>
     );
   }
@@ -34,7 +49,20 @@ export default function DashboardPage() {
   if (!stats) {
     return (
       <AppShell title="لوحة التحكم">
-        <p className="text-rose-400">حدث خطأ في تحميل البيانات</p>
+        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+          <p className="text-rose-400">{error ?? "حدث خطأ في تحميل البيانات"}</p>
+          <p className="max-w-md text-sm text-slate-500">
+            قد يستغرق الخادم وقتاً عند أول طلب. جرّب إعادة المحاولة.
+          </p>
+          <button
+            type="button"
+            onClick={loadStats}
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            <RefreshCw className="h-4 w-4" />
+            إعادة المحاولة
+          </button>
+        </div>
       </AppShell>
     );
   }

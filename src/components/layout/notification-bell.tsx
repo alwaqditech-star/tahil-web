@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, Check } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type NotificationItem } from "@/lib/api";
+import { toAppPath } from "@/lib/nav";
 
 export function NotificationBell() {
   const { token } = useAuth();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
@@ -73,7 +76,13 @@ export function NotificationBell() {
               <div
                 key={n.id}
                 className={`p-4 border-b border-white/5 hover:bg-white/5 cursor-pointer ${!n.isRead ? "bg-blue-500/5" : ""}`}
-                onClick={() => { markRead(n.id); if (n.link) window.location.href = n.link; }}
+                onClick={() => {
+                  markRead(n.id);
+                  if (n.link) {
+                    setOpen(false);
+                    router.push(toAppPath(n.link));
+                  }
+                }}
               >
                 <p className="text-sm font-semibold text-white">{n.title}</p>
                 <p className="text-xs text-slate-400 mt-1 line-clamp-2">{n.message}</p>

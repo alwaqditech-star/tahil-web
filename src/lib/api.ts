@@ -2,17 +2,41 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://tahil-api-lemon.verc
 
 export { API_URL as API_BASE_URL };
 
-type FetchOptions = RequestInit & { token?: string | null };
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type FetchOptions = RequestInit & { token?: string | null; retries?: number; timeoutMs?: number };
+
+async function fetchWithRetry(url: string, init: RequestInit, retries = 3, timeoutMs = 45000): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...init, signal: controller.signal });
+      clearTimeout(timer);
+      if ((res.status >= 500 || res.status === 429) && attempt < retries - 1) {
+        await sleep(800 * (attempt + 1));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      lastError = err;
+      if (attempt < retries - 1) await sleep(800 * (attempt + 1));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("فشل الاتصال بالخادم");
+}
 
 export async function apiFetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
-  const { token, ...init } = options;
+  const { token, retries = 3, timeoutMs = 45000, ...init } = options;
   const headers: Record<string, string> = {
     ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(init.headers as Record<string, string>),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: "include" });
+  const res = await fetchWithRetry(`${API_URL}${path}`, { ...init, headers, credentials: "include" }, retries, timeoutMs);
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "خطأ في الاتصال" }));
