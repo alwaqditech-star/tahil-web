@@ -6,7 +6,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { PanelCard } from "@/components/ui/panel-card";
 import { CHART, ChartTooltip, formatAxisValue } from "@/components/ui/charts";
 import { useAuth } from "@/contexts/auth-context";
-import { api, type FinancialReport, type ProjectReport, type ContractorReport, type SupplierReport } from "@/lib/api";
+import { api, type FinancialReport, type ProjectReport, type ContractorReport, type SupplierReport, type ExpenseReport, type ExpenseReportFilters, type ExtractReport, type ExtractReportFilters, type PettyCashReport } from "@/lib/api";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import {
@@ -16,8 +16,26 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Loader2, RefreshCw, Filter,
   Wallet, Download, Hash, FileText, Wrench, Clock, Banknote, Building2,
-  HardHat, Phone, Mail, Package,
+  HardHat, Phone, Mail, Package, Receipt, Layers,
 } from "lucide-react";
+
+const EMPTY_EXPENSE_FILTERS: ExpenseReportFilters = {
+  projectId: "all",
+  category: "all",
+  status: "all",
+  fromDate: "",
+  toDate: "",
+};
+
+const EMPTY_EXTRACT_FILTERS: ExtractReportFilters = {
+  projectId: "all",
+  contractorId: "all",
+  status: "all",
+  fromDate: "",
+  toDate: "",
+};
+
+const EXTRACT_STATUSES = ["draft", "submitted", "manager_approved", "approved", "paid", "rejected"];
 
 type TabId = "overview" | "projects" | "contractors" | "suppliers" | "expenses" | "extracts" | "petty";
 
@@ -31,7 +49,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "petty", label: "العهد حسب الموظف" },
 ];
 
-function exportPettyCashCsv(rows: FinancialReport["pettyCashByEmployee"]) {
+function exportPettyCashCsv(rows: PettyCashReport["byEmployee"]) {
   const headers = ["الموظف", "عدد العهد", "المخصص", "المستخدم", "المتبقي"];
   const lines = rows.map((p) => [
     p.name,
@@ -46,6 +64,48 @@ function exportPettyCashCsv(rows: FinancialReport["pettyCashByEmployee"]) {
   const a = document.createElement("a");
   a.href = url;
   a.download = "العهد-حسب-الموظف.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportExtractsReportCsv(rows: ExtractReport["rows"]) {
+  const headers = ["الرقم", "التاريخ", "المشروع", "المقاول", "العنوان", "المبلغ", "الحالة"];
+  const lines = rows.map((e) => [
+    e.extractNumber,
+    e.extractDate,
+    e.projectName,
+    e.contractorName,
+    e.title,
+    String(e.amount),
+    STATUS_LABELS[e.status] ?? e.status,
+  ]);
+  const csv = [headers, ...lines].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "المستخلصات.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportExpensesCsv(rows: ExpenseReport["rows"]) {
+  const headers = ["التاريخ", "العنوان", "المشروع", "التصنيف", "المبلغ", "الحالة", "مقدّم من"];
+  const lines = rows.map((e) => [
+    e.expenseDate,
+    e.title,
+    e.projectName,
+    e.category,
+    String(e.amount),
+    STATUS_LABELS[e.status] ?? e.status,
+    e.submittedBy,
+  ]);
+  const csv = [headers, ...lines].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "المصروفات.csv";
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -107,6 +167,17 @@ export default function ReportsPage() {
   const [supplierError, setSupplierError] = useState<string | null>(null);
   const [contractorOptions, setContractorOptions] = useState<Array<{ id: number; name: string; companyName?: string | null }>>([]);
   const [supplierOptions, setSupplierOptions] = useState<Array<{ id: number; name: string; companyName?: string | null; category?: string | null }>>([]);
+  const [expenseFilters, setExpenseFilters] = useState<ExpenseReportFilters>(EMPTY_EXPENSE_FILTERS);
+  const [expenseReport, setExpenseReport] = useState<ExpenseReport | null>(null);
+  const [expenseLoading, setExpenseLoading] = useState(false);
+  const [expenseError, setExpenseError] = useState<string | null>(null);
+  const [extractFilters, setExtractFilters] = useState<ExtractReportFilters>(EMPTY_EXTRACT_FILTERS);
+  const [extractReport, setExtractReport] = useState<ExtractReport | null>(null);
+  const [extractLoading, setExtractLoading] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [pettyReport, setPettyReport] = useState<PettyCashReport | null>(null);
+  const [pettyLoading, setPettyLoading] = useState(false);
+  const [pettyError, setPettyError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -168,6 +239,51 @@ export default function ReportsPage() {
     }
   }, [token]);
 
+  const loadExpenseReport = useCallback(async (filters: ExpenseReportFilters) => {
+    if (!token) return;
+    setExpenseLoading(true);
+    setExpenseError(null);
+    try {
+      const report = await api.reports.expenses(token, filters);
+      setExpenseReport(report);
+    } catch (err) {
+      setExpenseReport(null);
+      setExpenseError(err instanceof Error ? err.message : "خطأ في التحميل");
+    } finally {
+      setExpenseLoading(false);
+    }
+  }, [token]);
+
+  const loadExtractReport = useCallback(async (filters: ExtractReportFilters) => {
+    if (!token) return;
+    setExtractLoading(true);
+    setExtractError(null);
+    try {
+      const report = await api.reports.extracts(token, filters);
+      setExtractReport(report);
+    } catch (err) {
+      setExtractReport(null);
+      setExtractError(err instanceof Error ? err.message : "خطأ في التحميل");
+    } finally {
+      setExtractLoading(false);
+    }
+  }, [token]);
+
+  const loadPettyReport = useCallback(async (projectFilter?: number | "all") => {
+    if (!token) return;
+    setPettyLoading(true);
+    setPettyError(null);
+    try {
+      const report = await api.reports.pettyCash(token, projectFilter);
+      setPettyReport(report);
+    } catch (err) {
+      setPettyReport(null);
+      setPettyError(err instanceof Error ? err.message : "خطأ في التحميل");
+    } finally {
+      setPettyLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
@@ -220,6 +336,18 @@ export default function ReportsPage() {
     if (tab === "suppliers" && supplierReportId) loadSupplierReport(supplierReportId);
   }, [tab, supplierReportId, loadSupplierReport]);
 
+  useEffect(() => {
+    if (tab === "expenses") loadExpenseReport(expenseFilters);
+  }, [tab, expenseFilters, loadExpenseReport]);
+
+  useEffect(() => {
+    if (tab === "extracts") loadExtractReport(extractFilters);
+  }, [tab, extractFilters, loadExtractReport]);
+
+  useEffect(() => {
+    if (tab === "petty") loadPettyReport("all");
+  }, [tab, loadPettyReport]);
+
   const filterLabel = projectId === "all"
     ? "جميع المشاريع"
     : data?.projectsList.find((p) => p.id === projectId)?.name ?? "مشروع محدد";
@@ -251,6 +379,159 @@ export default function ReportsPage() {
       </div>
 
       {/* Filter */}
+      {tab === "expenses" ? (
+        <div className="mb-6 glass-card p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+              <Filter className="h-4 w-4" />
+              فلاتر التقرير
+            </label>
+            <button
+              type="button"
+              onClick={() => setExpenseFilters(EMPTY_EXPENSE_FILTERS)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:bg-white/5 hover:text-white"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              إعادة تعيين
+            </button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">المشروع</label>
+              <select
+                value={expenseFilters.projectId === "all" || !expenseFilters.projectId ? "all" : String(expenseFilters.projectId)}
+                onChange={(e) => setExpenseFilters((f) => ({ ...f, projectId: e.target.value === "all" ? "all" : Number(e.target.value) }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              >
+                <option value="all">الكل</option>
+                {(expenseReport?.projectsList ?? data?.projectsList ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">التصنيف</label>
+              <select
+                value={expenseFilters.category ?? "all"}
+                onChange={(e) => setExpenseFilters((f) => ({ ...f, category: e.target.value }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              >
+                <option value="all">الكل</option>
+                {(expenseReport?.categories ?? []).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">الحالة</label>
+              <select
+                value={expenseFilters.status ?? "all"}
+                onChange={(e) => setExpenseFilters((f) => ({ ...f, status: e.target.value }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              >
+                <option value="all">الكل</option>
+                {["pending", "manager_approved", "approved", "rejected"].map((s) => (
+                  <option key={s} value={s}>{STATUS_LABELS[s] ?? s}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">من تاريخ</label>
+              <input
+                type="date"
+                value={expenseFilters.fromDate ?? ""}
+                onChange={(e) => setExpenseFilters((f) => ({ ...f, fromDate: e.target.value }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">إلى تاريخ</label>
+              <input
+                type="date"
+                value={expenseFilters.toDate ?? ""}
+                onChange={(e) => setExpenseFilters((f) => ({ ...f, toDate: e.target.value }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+          </div>
+        </div>
+      ) : tab === "extracts" ? (
+        <div className="mb-6 glass-card p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+              <Filter className="h-4 w-4" />
+              فلاتر التقرير
+            </label>
+            <button
+              type="button"
+              onClick={() => setExtractFilters(EMPTY_EXTRACT_FILTERS)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:bg-white/5 hover:text-white"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              إعادة تعيين
+            </button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">المشروع</label>
+              <select
+                value={extractFilters.projectId === "all" || !extractFilters.projectId ? "all" : String(extractFilters.projectId)}
+                onChange={(e) => setExtractFilters((f) => ({ ...f, projectId: e.target.value === "all" ? "all" : Number(e.target.value) }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              >
+                <option value="all">الكل</option>
+                {(extractReport?.projectsList ?? data?.projectsList ?? []).map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">المقاول</label>
+              <select
+                value={extractFilters.contractorId === "all" || !extractFilters.contractorId ? "all" : String(extractFilters.contractorId)}
+                onChange={(e) => setExtractFilters((f) => ({ ...f, contractorId: e.target.value === "all" ? "all" : Number(e.target.value) }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              >
+                <option value="all">الكل</option>
+                {(extractReport?.contractorsList ?? contractorOptions.map((c) => ({ id: c.id, name: c.companyName ? `${c.name} — ${c.companyName}` : c.name }))).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">الحالة</label>
+              <select
+                value={extractFilters.status ?? "all"}
+                onChange={(e) => setExtractFilters((f) => ({ ...f, status: e.target.value }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              >
+                <option value="all">الكل</option>
+                {EXTRACT_STATUSES.map((s) => (
+                  <option key={s} value={s}>{STATUS_LABELS[s] ?? s}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">من تاريخ</label>
+              <input
+                type="date"
+                value={extractFilters.fromDate ?? ""}
+                onChange={(e) => setExtractFilters((f) => ({ ...f, fromDate: e.target.value }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-slate-500">إلى تاريخ</label>
+              <input
+                type="date"
+                value={extractFilters.toDate ?? ""}
+                onChange={(e) => setExtractFilters((f) => ({ ...f, toDate: e.target.value }))}
+                className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+              />
+            </div>
+          </div>
+        </div>
+      ) : tab === "petty" ? null : (
       <div className="mb-6 glass-card p-4">
         <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
           <Filter className="h-4 w-4" />
@@ -308,15 +589,16 @@ export default function ReportsPage() {
           </>
         )}
       </div>
+      )}
 
-      {loading && (
+      {(loading && tab !== "expenses" && tab !== "extracts" && tab !== "petty") && (
         <div className="flex flex-col items-center justify-center gap-3 py-20">
           <Loader2 className="h-8 w-8 animate-spin spinner-brand" />
           <p className="text-sm text-slate-500">جاري تحميل التقرير...</p>
         </div>
       )}
 
-      {!loading && error && (
+      {!loading && error && tab !== "expenses" && tab !== "extracts" && tab !== "petty" && (
         <div className="flex flex-col items-center gap-4 py-16 text-center">
           <p className="text-rose-400">{error}</p>
           <button
@@ -330,47 +612,12 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {!loading && data && tab !== "projects" && tab !== "contractors" && tab !== "suppliers" && (
+      {!loading && data && tab !== "projects" && tab !== "contractors" && tab !== "suppliers" && tab !== "expenses" && tab !== "extracts" && tab !== "petty" && (
         <>
           {/* KPI Cards */}
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {tab === "petty" ? (
-              <>
-                <StatCard
-                  title="إجمالي المتبقي"
-                  value={formatCurrency(data.pettyCashSummary.totalRemaining)}
-                  subtitle={filterLabel}
-                  icon={TrendingUp}
-                  accent="success"
-                  valueTone="positive"
-                />
-                <StatCard
-                  title="إجمالي المستخدم"
-                  value={formatCurrency(data.pettyCashSummary.totalUsed)}
-                  subtitle="من العهد المخصصة"
-                  icon={TrendingDown}
-                  accent="danger"
-                  valueTone="negative"
-                />
-                <StatCard
-                  title="إجمالي المخصص"
-                  value={formatCurrency(data.pettyCashSummary.totalAllocated)}
-                  subtitle={`${data.pettyCashByEmployee.length} موظف`}
-                  icon={DollarSign}
-                  accent="brand"
-                />
-                <StatCard
-                  title="عدد العمليات"
-                  value={data.pettyCashSummary.transactionCount}
-                  subtitle="سجل عهد"
-                  icon={Wallet}
-                  accent="warning"
-                />
-              </>
-            ) : (
-              <>
-                <StatCard
-                  title="إجمالي الإيرادات"
+            <StatCard
+              title="إجمالي الإيرادات"
                   value={formatCurrency(data.summary.totalRevenue)}
                   subtitle="قيمة العقود"
                   icon={TrendingUp}
@@ -398,10 +645,8 @@ export default function ReportsPage() {
                   value={`${data.summary.profitMargin}%`}
                   subtitle={filterLabel}
                   icon={Percent}
-                  accent="info"
-                />
-              </>
-            )}
+              accent="info"
+            />
           </div>
 
           {tab === "overview" && (
@@ -480,75 +725,6 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {tab === "expenses" && (
-            <PanelCard title={`تفاصيل المصروفات — ${filterLabel}`}>
-              <DataTable
-                headers={["التاريخ", "العنوان", "المشروع", "التصنيف", "المبلغ", "الحالة", "مقدّم من"]}
-                empty="لا توجد مصروفات"
-                rows={data.expenseRows.map((e) => [
-                  formatDate(e.expenseDate),
-                  e.title,
-                  e.projectName,
-                  e.category,
-                  <span key="amt" className="text-money-negative">{formatCurrency(e.amount)}</span>,
-                  STATUS_LABELS[e.status] ?? e.status,
-                  e.submittedBy,
-                ])}
-              />
-            </PanelCard>
-          )}
-
-          {tab === "extracts" && (
-            <PanelCard title={`تفاصيل المستخلصات — ${filterLabel}`}>
-              <DataTable
-                headers={["التاريخ", "الرقم", "العنوان", "المشروع", "المقاول", "المبلغ", "الحالة"]}
-                empty="لا توجد مستخلصات"
-                rows={data.extractRows.map((e) => [
-                  formatDate(e.extractDate),
-                  e.extractNumber,
-                  e.title,
-                  e.projectName,
-                  e.contractorName,
-                  <span key="amt" className="text-money-positive">{formatCurrency(e.amount)}</span>,
-                  STATUS_LABELS[e.status] ?? e.status,
-                ])}
-              />
-            </PanelCard>
-          )}
-
-          {tab === "petty" && (
-            <PanelCard
-              title="العهد حسب الموظف"
-              action={
-                <button
-                  type="button"
-                  onClick={() => data.pettyCashByEmployee.length
-                    ? exportPettyCashCsv(data.pettyCashByEmployee)
-                    : undefined}
-                  disabled={data.pettyCashByEmployee.length === 0}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  تصدير Excel
-                </button>
-              }
-            >
-              <DataTable
-                headers={["الموظف", "عدد العهد", "المخصص", "المستخدم", "المتبقي"]}
-                empty="لا توجد عهد"
-                rows={data.pettyCashByEmployee.map((p) => [
-                  p.name,
-                  <span key="cnt" className="inline-flex items-center gap-1 tabular-nums text-slate-400">
-                    <Hash className="h-3 w-3" />
-                    {p.count}
-                  </span>,
-                  formatCurrency(p.allocated),
-                  <span key="used" className="text-money-negative">{formatCurrency(p.used)}</span>,
-                  <span key="rem" className="text-money-positive">{formatCurrency(p.remaining)}</span>,
-                ])}
-              />
-            </PanelCard>
-          )}
         </>
       )}
 
@@ -883,6 +1059,209 @@ export default function ReportsPage() {
 
           {!supplierLoading && !supplierReport && !supplierError && supplierOptions.length === 0 && (data?.suppliers.length ?? 0) === 0 && (
             <p className="py-16 text-center text-slate-500">لا يوجد موردون لعرض التقرير</p>
+          )}
+        </>
+      )}
+
+      {tab === "expenses" && (
+        <>
+          {expenseLoading && (
+            <div className="flex flex-col items-center justify-center gap-3 py-20">
+              <Loader2 className="h-8 w-8 animate-spin spinner-brand" />
+              <p className="text-sm text-slate-500">جاري تحميل تقرير المصروفات...</p>
+            </div>
+          )}
+
+          {!expenseLoading && expenseError && (
+            <div className="flex flex-col items-center gap-4 py-16 text-center">
+              <p className="text-rose-400">{expenseError}</p>
+              <button
+                type="button"
+                onClick={() => loadExpenseReport(expenseFilters)}
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm text-white"
+              >
+                <RefreshCw className="h-4 w-4" />
+                إعادة المحاولة
+              </button>
+            </div>
+          )}
+
+          {!expenseLoading && expenseReport && (
+            <>
+              <div className="mb-6 grid gap-4 sm:grid-cols-3">
+                <StatCard title="عدد العمليات" value={expenseReport.summary.transactionsCount} icon={Hash} accent="default" />
+                <StatCard title="إجمالي المصروفات" value={formatCurrency(expenseReport.summary.totalAmount)} icon={Receipt} accent="danger" valueTone="negative" />
+                <StatCard title="عدد التصنيفات" value={expenseReport.summary.categoriesCount} icon={Layers} accent="info" />
+              </div>
+
+              <PanelCard title="توزيع المصروفات حسب التصنيف" className="mb-6">
+                <DataTable
+                  headers={["التصنيف", "العدد", "الإجمالي"]}
+                  empty="لا توجد مصروفات مطابقة للفلتر"
+                  rows={expenseReport.byCategory.map((c) => [
+                    c.category,
+                    <span key="cnt" className="tabular-nums">{c.count}</span>,
+                    <span key="tot" className="tabular-nums text-money-negative">{formatCurrency(c.total)}</span>,
+                  ])}
+                />
+              </PanelCard>
+
+              <PanelCard
+                title="تفاصيل المصروفات"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => expenseReport.rows.length ? exportExpensesCsv(expenseReport.rows) : undefined}
+                    disabled={expenseReport.rows.length === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    تصدير Excel
+                  </button>
+                }
+              >
+                <DataTable
+                  headers={["التاريخ", "العنوان", "المشروع", "التصنيف", "المبلغ", "الحالة"]}
+                  empty="لا توجد مصروفات"
+                  rows={expenseReport.rows.map((e) => [
+                    formatDate(e.expenseDate),
+                    <span key="title" className="font-medium">{e.title}</span>,
+                    e.projectName,
+                    e.category,
+                    <span key="amt" className="tabular-nums text-money-negative">{formatCurrency(e.amount)}</span>,
+                    <Badge key="st" variant={statusVariant(e.status)}>{STATUS_LABELS[e.status] ?? e.status}</Badge>,
+                  ])}
+                />
+              </PanelCard>
+            </>
+          )}
+        </>
+      )}
+
+      {tab === "extracts" && (
+        <>
+          {extractLoading && (
+            <div className="flex flex-col items-center justify-center gap-3 py-20">
+              <Loader2 className="h-8 w-8 animate-spin spinner-brand" />
+              <p className="text-sm text-slate-500">جاري تحميل تقرير المستخلصات...</p>
+            </div>
+          )}
+
+          {!extractLoading && extractError && (
+            <div className="flex flex-col items-center gap-4 py-16 text-center">
+              <p className="text-rose-400">{extractError}</p>
+              <button
+                type="button"
+                onClick={() => loadExtractReport(extractFilters)}
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm text-white"
+              >
+                <RefreshCw className="h-4 w-4" />
+                إعادة المحاولة
+              </button>
+            </div>
+          )}
+
+          {!extractLoading && extractReport && (
+            <>
+              <div className="mb-6 grid gap-4 sm:grid-cols-2">
+                <StatCard title="عدد المستخلصات" value={extractReport.summary.extractsCount} icon={FileText} accent="default" />
+                <StatCard title="إجمالي المبلغ" value={formatCurrency(extractReport.summary.totalAmount)} icon={TrendingUp} accent="success" valueTone="positive" />
+              </div>
+
+              <PanelCard
+                title="تفاصيل المستخلصات"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => extractReport.rows.length ? exportExtractsReportCsv(extractReport.rows) : undefined}
+                    disabled={extractReport.rows.length === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    تصدير Excel
+                  </button>
+                }
+              >
+                <DataTable
+                  headers={["الرقم", "التاريخ", "المشروع", "المقاول", "المبلغ", "الحالة"]}
+                  empty="لا توجد مستخلصات"
+                  rows={extractReport.rows.map((e) => [
+                    e.extractNumber,
+                    formatDate(e.extractDate),
+                    e.projectName,
+                    e.contractorName,
+                    <span key="amt" className="tabular-nums text-money-positive">{formatCurrency(e.amount)}</span>,
+                    <Badge key="st" variant={statusVariant(e.status)}>{STATUS_LABELS[e.status] ?? e.status}</Badge>,
+                  ])}
+                />
+              </PanelCard>
+            </>
+          )}
+        </>
+      )}
+
+      {tab === "petty" && (
+        <>
+          {pettyLoading && (
+            <div className="flex flex-col items-center justify-center gap-3 py-20">
+              <Loader2 className="h-8 w-8 animate-spin spinner-brand" />
+              <p className="text-sm text-slate-500">جاري تحميل تقرير العهد...</p>
+            </div>
+          )}
+
+          {!pettyLoading && pettyError && (
+            <div className="flex flex-col items-center gap-4 py-16 text-center">
+              <p className="text-rose-400">{pettyError}</p>
+              <button
+                type="button"
+                onClick={() => loadPettyReport("all")}
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm text-white"
+              >
+                <RefreshCw className="h-4 w-4" />
+                إعادة المحاولة
+              </button>
+            </div>
+          )}
+
+          {!pettyLoading && pettyReport && (
+            <>
+              <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard title="إجمالي المتبقي" value={formatCurrency(pettyReport.summary.totalRemaining)} icon={TrendingUp} accent="success" valueTone="positive" />
+                <StatCard title="إجمالي المستخدم" value={formatCurrency(pettyReport.summary.totalUsed)} icon={TrendingDown} accent="danger" valueTone="negative" />
+                <StatCard title="إجمالي المخصص" value={formatCurrency(pettyReport.summary.totalAllocated)} subtitle={`${pettyReport.byEmployee.length} موظف`} icon={DollarSign} accent="brand" />
+                <StatCard title="عدد العمليات" value={pettyReport.summary.transactionCount} subtitle="سجل عهد" icon={Wallet} accent="warning" />
+              </div>
+
+              <PanelCard
+                title="العهد حسب الموظف"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => pettyReport.byEmployee.length ? exportPettyCashCsv(pettyReport.byEmployee) : undefined}
+                    disabled={pettyReport.byEmployee.length === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    تصدير Excel
+                  </button>
+                }
+              >
+                <DataTable
+                  headers={["الموظف", "عدد العهد", "المخصص", "المستخدم", "المتبقي"]}
+                  empty="لا توجد عهد"
+                  rows={pettyReport.byEmployee.map((p) => [
+                    p.name,
+                    <span key="cnt" className="inline-flex items-center gap-1 tabular-nums text-slate-400">
+                      <Hash className="h-3 w-3" />
+                      {p.count}
+                    </span>,
+                    formatCurrency(p.allocated),
+                    <span key="used" className="text-money-negative">{formatCurrency(p.used)}</span>,
+                    <span key="rem" className="text-money-positive">{formatCurrency(p.remaining)}</span>,
+                  ])}
+                />
+              </PanelCard>
+            </>
           )}
         </>
       )}
