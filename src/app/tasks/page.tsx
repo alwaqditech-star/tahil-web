@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, Textarea, FormActions, PageToolbar, Btn } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
-import { api, type Task, type UserRow } from "@/lib/api";
+import { api, type Task, type UserRow, API_BASE_URL } from "@/lib/api";
 import { canCreateTask } from "@/lib/permissions";
 import { Loader2, AlertTriangle, Clock } from "lucide-react";
 
@@ -42,8 +42,7 @@ export default function TasksPage() {
   }, [token, filter, mine]);
 
   async function apiFetchTasks(token: string, query: string) {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-    const res = await fetch(`${API_URL}/api/tasks?${query}`, { headers: { Authorization: `Bearer ${token}` }, credentials: "include" });
+    const res = await fetch(`${API_BASE_URL}/api/tasks?${query}`, { headers: { Authorization: `Bearer ${token}` }, credentials: "include" });
     return res.json();
   }
 

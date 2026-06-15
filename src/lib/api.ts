@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://tahil-api-lemon.vercel.app";
+
+export { API_URL as API_BASE_URL };
 
 type FetchOptions = RequestInit & { token?: string | null };
 
