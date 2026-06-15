@@ -204,6 +204,60 @@ export type FinancialReport = {
   projectsList: Array<{ id: number; name: string }>;
 };
 
+export type ProjectReport = {
+  project: {
+    id: number; name: string; client: string; location: string | null; status: string;
+    startDate: string | null; endDate: string | null;
+    contractValue: number; budgetAllocated: number; progressPercent: number;
+  };
+  summary: {
+    totalExpenses: number; totalExtracts: number; paidExtracts: number; profitMargin: number;
+    itemsCount: number; budgetConsumptionPercent: number; totalPurchases: number; pettyCashUsed: number;
+  };
+  expensesByCategory: Array<{ category: string; amount: number; percent: number; color: string }>;
+  contractItems: Array<{
+    id: number; itemCode: string | null; description: string; unit: string;
+    quantity: number; unitPrice: number; total: number;
+    executedQuantity: number; progressPercent: number;
+  }>;
+};
+
+export type ContractorReport = {
+  contractor: {
+    id: number; name: string; companyName: string | null; phone: string | null;
+    email: string | null; vatNumber: string | null; specialty: string | null; status: string;
+  };
+  summary: {
+    contractValue: number; completedValue: number; completionPercent: number;
+    totalExtracts: number; paidToContractor: number; dueToContractor: number;
+    extractsCount: number; itemsCount: number;
+  };
+  contractItems: Array<{
+    id: number; itemCode: string | null; projectId: number; projectName: string;
+    description: string; unit: string; quantity: number; unitPrice: number;
+    total: number; completedQuantity: number; progressPercent: number;
+  }>;
+  extracts: Array<{
+    id: number; extractNumber: string; title: string; projectId: number;
+    projectName: string; extractDate: string; amount: number; status: string;
+  }>;
+};
+
+export type SupplierReport = {
+  supplier: {
+    id: number; name: string; companyName: string | null; category: string | null;
+    phone: string | null; email: string | null; vatNumber: string | null; status: string;
+  };
+  summary: {
+    totalPurchases: number; paid: number; remaining: number; ordersCount: number;
+  };
+  purchases: Array<{
+    id: number; purchaseNumber: string; title: string; projectId: number;
+    projectName: string; orderDate: string; amount: number; paidAmount: number;
+    status: string; paymentStatus: string;
+  }>;
+};
+
 export const api = {
   login: (u: string, p: string) => apiFetch<User & { token: string }>("/api/auth/login", { method: "POST", body: JSON.stringify({ username: u, password: p }) }),
   logout: (token: string) => apiFetch("/api/auth/logout", { method: "POST", token }),
@@ -214,6 +268,12 @@ export const api = {
       const q = projectId && projectId !== "all" ? `?projectId=${projectId}` : "";
       return apiFetch<FinancialReport>(`/api/reports/financial${q}`, { token, timeoutMs: 60000 });
     },
+    project: (token: string, projectId: number) =>
+      apiFetch<ProjectReport>(`/api/reports/project?projectId=${projectId}`, { token, timeoutMs: 60000 }),
+    contractor: (token: string, contractorId: number) =>
+      apiFetch<ContractorReport>(`/api/reports/contractor?contractorId=${contractorId}`, { token, timeoutMs: 60000 }),
+    supplier: (token: string, supplierId: number) =>
+      apiFetch<SupplierReport>(`/api/reports/supplier?supplierId=${supplierId}`, { token, timeoutMs: 60000 }),
   },
   expenseCategories: (token: string) => apiFetch<ExpenseCategory[]>("/api/expense-categories", { token }),
   upload: async (token: string, file: File) => {
