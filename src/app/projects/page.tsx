@@ -47,6 +47,15 @@ export default function ProjectsPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
+    if (!editId && formStep < 3) {
+      if (formStep === 1 && (!form.name?.trim() || !form.client?.trim())) {
+        setError("اسم المشروع والعميل مطلوبان");
+        return;
+      }
+      setError(null);
+      setFormStep((s) => s + 1);
+      return;
+    }
     setSaving(true); setError(null);
     try {
       const body = {
@@ -119,7 +128,15 @@ export default function ProjectsPage() {
       )}
 
       <Modal open={modal} onClose={() => setModal(false)} title={editId ? "تعديل مشروع" : "إضافة مشروع"} wide>
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form
+          onSubmit={onSubmit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !editId && formStep < 3 && (e.target as HTMLElement).tagName !== "TEXTAREA") {
+              e.preventDefault();
+            }
+          }}
+          className="space-y-4"
+        >
           {error && <p className="text-rose-400 text-sm">{error}</p>}
           {!editId && (
             <div className="mb-4 flex gap-2 text-xs">
@@ -161,12 +178,20 @@ export default function ProjectsPage() {
               {editId ? "إلغاء" : formStep > 1 ? "السابق" : "إلغاء"}
             </Btn>
             {!editId && formStep < 3 ? (
-              <Btn type="button" onClick={() => {
-                if (formStep === 1 && (!form.name?.trim() || !form.client?.trim())) {
-                  setError("اسم المشروع والعميل مطلوبان"); return;
-                }
-                setError(null); setFormStep(formStep + 1);
-              }}>التالي</Btn>
+              <Btn
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (formStep === 1 && (!form.name?.trim() || !form.client?.trim())) {
+                    setError("اسم المشروع والعميل مطلوبان");
+                    return;
+                  }
+                  setError(null);
+                  setFormStep((s) => s + 1);
+                }}
+              >
+                التالي
+              </Btn>
             ) : (
               <Btn type="submit" loading={saving}>حفظ</Btn>
             )}

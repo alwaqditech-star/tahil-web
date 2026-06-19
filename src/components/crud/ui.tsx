@@ -75,8 +75,9 @@ export function ConfirmDialog({ open, onClose, onConfirm, message, loading }: {
   );
 }
 
-export function Btn({ children, onClick, type = "button", variant = "primary", loading, className, disabled }: {
-  children: React.ReactNode; onClick?: () => void; type?: "button" | "submit";
+export function Btn({ children, onClick, onMouseDown, type = "button", variant = "primary", loading, className, disabled }: {
+  children: React.ReactNode; onClick?: () => void; onMouseDown?: (e: React.MouseEvent) => void;
+  type?: "button" | "submit";
   variant?: "primary" | "secondary" | "danger" | "ghost" | "success";
   loading?: boolean; className?: string; disabled?: boolean;
 }) {
@@ -91,6 +92,7 @@ export function Btn({ children, onClick, type = "button", variant = "primary", l
     <button
       type={type}
       onClick={onClick}
+      onMouseDown={onMouseDown}
       disabled={disabled || loading}
       className={cn("px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 inline-flex items-center gap-2", variants[variant], className)}
     >
