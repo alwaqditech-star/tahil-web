@@ -44,19 +44,11 @@ export default function ProjectsPage() {
     setFormStep(1); setError(null); setModal(true);
   };
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveProject = async () => {
     if (!token) return;
-    if (!editId && formStep < 3) {
-      if (formStep === 1 && (!form.name?.trim() || !form.client?.trim())) {
-        setError("اسم المشروع والعميل مطلوبان");
-        return;
-      }
-      setError(null);
-      setFormStep((s) => s + 1);
-      return;
-    }
-    setSaving(true); setError(null);
+    if (!editId && formStep < 3) return;
+    setSaving(true);
+    setError(null);
     try {
       const body = {
         name: form.name, client: form.client, description: form.description,
@@ -66,9 +58,31 @@ export default function ProjectsPage() {
       };
       if (editId) await api.projects(token).update(editId, body);
       else await api.projects(token).create(body);
-      setModal(false); load();
-    } catch (err) { setError(err instanceof Error ? err.message : "خطأ"); }
-    finally { setSaving(false); }
+      setModal(false);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "خطأ");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const goNext = () => {
+    if (formStep === 1 && (!form.name?.trim() || !form.client?.trim())) {
+      setError("اسم المشروع والعميل مطلوبان");
+      return;
+    }
+    setError(null);
+    window.setTimeout(() => setFormStep((s) => s + 1), 0);
+  };
+
+  const goBack = () => {
+    if (editId) {
+      setModal(false);
+      return;
+    }
+    if (formStep > 1) setFormStep((s) => s - 1);
+    else setModal(false);
   };
 
   const onDelete = async () => {
@@ -128,18 +142,10 @@ export default function ProjectsPage() {
       )}
 
       <Modal open={modal} onClose={() => setModal(false)} title={editId ? "تعديل مشروع" : "إضافة مشروع"} wide>
-        <form
-          onSubmit={onSubmit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !editId && formStep < 3 && (e.target as HTMLElement).tagName !== "TEXTAREA") {
-              e.preventDefault();
-            }
-          }}
-          className="space-y-4"
-        >
+        <div className="space-y-4">
           {error && <p className="text-rose-400 text-sm">{error}</p>}
           {!editId && (
-            <div className="mb-4 flex gap-2 text-xs">
+            <div className="mb-4 flex flex-wrap gap-2 text-xs">
               {["البيانات الأساسية", "المالية والجدول", "الوصف"].map((label, i) => (
                 <span key={label} className={`rounded-full px-3 py-1 ${formStep === i + 1 ? "bg-[var(--brand)] text-white" : "bg-white/5 text-slate-400"}`}>
                   {i + 1}. {label}
@@ -149,8 +155,8 @@ export default function ProjectsPage() {
           )}
           {(editId || formStep === 1) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="اسم المشروع" required><Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
-              <Field label="العميل" required><Input value={form.client ?? ""} onChange={(e) => setForm({ ...form, client: e.target.value })} required /></Field>
+              <Field label="اسم المشروع" required><Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+              <Field label="العميل" required><Input value={form.client ?? ""} onChange={(e) => setForm({ ...form, client: e.target.value })} /></Field>
               <Field label="الموقع / المدينة"><Input value={form.location ?? ""} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="مثال: الرياض — حي النرجس" /></Field>
               <Field label="الحالة">
                 <Select value={form.status ?? "active"} onChange={(e) => setForm({ ...form, status: e.target.value })}>
@@ -174,29 +180,17 @@ export default function ProjectsPage() {
             </Field>
           )}
           <div className="flex gap-3 justify-end pt-4 border-t border-white/5 mt-4">
-            <Btn variant="ghost" type="button" onClick={() => editId ? setModal(false) : formStep > 1 ? setFormStep(formStep - 1) : setModal(false)}>
+            <Btn variant="ghost" type="button" onClick={goBack}>
               {editId ? "إلغاء" : formStep > 1 ? "السابق" : "إلغاء"}
             </Btn>
-            {!editId && formStep < 3 ? (
-              <Btn
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  if (formStep === 1 && (!form.name?.trim() || !form.client?.trim())) {
-                    setError("اسم المشروع والعميل مطلوبان");
-                    return;
-                  }
-                  setError(null);
-                  setFormStep((s) => s + 1);
-                }}
-              >
-                التالي
-              </Btn>
-            ) : (
-              <Btn type="submit" loading={saving}>حفظ</Btn>
+            {!editId && formStep < 3 && (
+              <Btn type="button" onClick={goNext}>التالي</Btn>
+            )}
+            {(editId || formStep === 3) && (
+              <Btn type="button" onClick={saveProject} loading={saving}>حفظ</Btn>
             )}
           </div>
-        </form>
+        </div>
       </Modal>
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={onDelete} message="هل أنت متأكد من حذف هذا المشروع؟" loading={saving} />
