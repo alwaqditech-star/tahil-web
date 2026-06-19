@@ -284,7 +284,6 @@ select option:checked {
 }
 
 .erp-page-header {
-  display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;

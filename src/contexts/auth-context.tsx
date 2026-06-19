@@ -17,6 +17,21 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const PUBLIC_PATHS = ["/login"];
 const PROJECTS_MODULE_PATH = /^\/projects(\/|$)/;
+const TOKEN_KEY = "jade_token";
+
+function getStoredToken(): string | null {
+  return sessionStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY);
+}
+
+function setStoredToken(value: string) {
+  sessionStorage.setItem(TOKEN_KEY, value);
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+function clearStoredToken() {
+  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -26,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    const stored = localStorage.getItem("jade_token");
+    const stored = getStoredToken();
     if (!stored) {
       setLoading(false);
       if (!PUBLIC_PATHS.includes(pathname)) router.replace("/login");
@@ -42,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        localStorage.removeItem("jade_token");
+        clearStoredToken();
         setToken(null);
         if (!PUBLIC_PATHS.includes(pathname)) router.replace("/login");
       })
@@ -52,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     try {
       const result = await api.login(username, password);
-      localStorage.setItem("jade_token", result.token);
+      setStoredToken(result.token);
       setToken(result.token);
       setUser(result);
       router.replace("/");
@@ -64,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     if (token) await api.logout(token).catch(() => {});
-    localStorage.removeItem("jade_token");
+    clearStoredToken();
     setToken(null);
     setUser(null);
     router.replace("/login");

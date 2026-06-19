@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
-import { Modal, Btn, Field, Input, Select, Textarea, FormActions, RowActions, PageToolbar, ConfirmDialog, NumberInput } from "@/components/crud/ui";
+import { Modal, Btn, Field, Input, Select, Textarea, RowActions, PageToolbar, ConfirmDialog, NumberInput } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type Project } from "@/lib/api";
 import { canCreate, canEdit, canDelete } from "@/lib/permissions";
@@ -25,6 +25,7 @@ export default function ProjectsPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState<Partial<Project>>(empty());
   const [editId, setEditId] = useState<number | null>(null);
+  const [formStep, setFormStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,11 +37,11 @@ export default function ProjectsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openAdd = () => { setEditId(null); setForm(empty()); setError(null); setModal(true); };
+  const openAdd = () => { setEditId(null); setForm(empty()); setFormStep(1); setError(null); setModal(true); };
   const openEdit = (p: Project) => {
     setEditId(p.id);
     setForm({ ...p, startDate: p.startDate ?? "", endDate: p.endDate ?? "" });
-    setError(null); setModal(true);
+    setFormStep(1); setError(null); setModal(true);
   };
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -120,23 +121,56 @@ export default function ProjectsPage() {
       <Modal open={modal} onClose={() => setModal(false)} title={editId ? "تعديل مشروع" : "إضافة مشروع"} wide>
         <form onSubmit={onSubmit} className="space-y-4">
           {error && <p className="text-rose-400 text-sm">{error}</p>}
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="اسم المشروع" required><Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
-            <Field label="العميل" required><Input value={form.client ?? ""} onChange={(e) => setForm({ ...form, client: e.target.value })} required /></Field>
-            <Field label="الموقع"><Input value={form.location ?? ""} onChange={(e) => setForm({ ...form, location: e.target.value })} /></Field>
-            <Field label="الحالة">
-              <Select value={form.status ?? "active"} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                <option value="active">نشط</option><option value="completed">مكتمل</option><option value="on_hold">متوقف</option>
-              </Select>
+          {!editId && (
+            <div className="mb-4 flex gap-2 text-xs">
+              {["البيانات الأساسية", "المالية والجدول", "الوصف"].map((label, i) => (
+                <span key={label} className={`rounded-full px-3 py-1 ${formStep === i + 1 ? "bg-[var(--brand)] text-white" : "bg-white/5 text-slate-400"}`}>
+                  {i + 1}. {label}
+                </span>
+              ))}
+            </div>
+          )}
+          {(editId || formStep === 1) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="اسم المشروع" required><Input value={form.name ?? ""} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
+              <Field label="العميل" required><Input value={form.client ?? ""} onChange={(e) => setForm({ ...form, client: e.target.value })} required /></Field>
+              <Field label="الموقع / المدينة"><Input value={form.location ?? ""} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="مثال: الرياض — حي النرجس" /></Field>
+              <Field label="الحالة">
+                <Select value={form.status ?? "active"} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                  <option value="active">نشط</option><option value="completed">مكتمل</option><option value="on_hold">متوقف</option>
+                </Select>
+              </Field>
+            </div>
+          )}
+          {(editId || formStep === 2) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="تاريخ البداية"><Input type="date" value={form.startDate ?? ""} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></Field>
+              <Field label="تاريخ النهاية"><Input type="date" value={form.endDate ?? ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
+              <Field label="قيمة العقد"><NumberInput value={form.contractValue ?? 0} onChange={(contractValue) => setForm({ ...form, contractValue })} /></Field>
+              <Field label="الميزانية"><NumberInput value={form.budgetAllocated ?? 0} onChange={(budgetAllocated) => setForm({ ...form, budgetAllocated })} /></Field>
+              <Field label="نسبة الإنجاز %"><NumberInput min={0} max={100} value={form.progressPercent ?? 0} onChange={(progressPercent) => setForm({ ...form, progressPercent })} /></Field>
+            </div>
+          )}
+          {(editId || formStep === 3) && (
+            <Field label="وصف المشروع / ملاحظات الفريق">
+              <Textarea rows={3} value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="تفاصيل إضافية، فريق العمل، ملاحظات..." />
             </Field>
-            <Field label="تاريخ البداية"><Input type="date" value={form.startDate ?? ""} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /></Field>
-            <Field label="تاريخ النهاية"><Input type="date" value={form.endDate ?? ""} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /></Field>
-            <Field label="قيمة العقد"><NumberInput value={form.contractValue ?? 0} onChange={(contractValue) => setForm({ ...form, contractValue })} /></Field>
-            <Field label="الميزانية"><NumberInput value={form.budgetAllocated ?? 0} onChange={(budgetAllocated) => setForm({ ...form, budgetAllocated })} /></Field>
-            <Field label="نسبة الإنجاز %"><NumberInput min={0} max={100} value={form.progressPercent ?? 0} onChange={(progressPercent) => setForm({ ...form, progressPercent })} /></Field>
+          )}
+          <div className="flex gap-3 justify-end pt-4 border-t border-white/5 mt-4">
+            <Btn variant="ghost" type="button" onClick={() => editId ? setModal(false) : formStep > 1 ? setFormStep(formStep - 1) : setModal(false)}>
+              {editId ? "إلغاء" : formStep > 1 ? "السابق" : "إلغاء"}
+            </Btn>
+            {!editId && formStep < 3 ? (
+              <Btn type="button" onClick={() => {
+                if (formStep === 1 && (!form.name?.trim() || !form.client?.trim())) {
+                  setError("اسم المشروع والعميل مطلوبان"); return;
+                }
+                setError(null); setFormStep(formStep + 1);
+              }}>التالي</Btn>
+            ) : (
+              <Btn type="submit" loading={saving}>حفظ</Btn>
+            )}
           </div>
-          <Field label="الوصف"><Textarea rows={2} value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
-          <FormActions onCancel={() => setModal(false)} loading={saving} />
         </form>
       </Modal>
 

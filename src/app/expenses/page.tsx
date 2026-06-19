@@ -100,6 +100,12 @@ export default function ExpensesPage() {
 
   const approve = async (id: number, action: string) => {
     if (!token) return;
+    const messages: Record<string, string> = {
+      manager_approve: "هل أنت متأكد من اعتماد هذا المصروف؟",
+      accountant_approve: "هل أنت متأكد من الاعتماد النهائي للمصروف؟",
+      reject: "هل أنت متأكد من رفض هذا المصروف؟",
+    };
+    if (messages[action] && !confirm(messages[action])) return;
     try { await api.expenses(token).patch(id, { action }); load(); }
     catch (err) { alert(err instanceof Error ? err.message : "خطأ"); }
   };
