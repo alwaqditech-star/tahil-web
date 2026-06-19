@@ -9,6 +9,7 @@ import { CatalogPicker } from "@/components/catalog-picker";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type Project, type ProjectItem, type CatalogItem } from "@/lib/api";
 import { canCreate, canEdit, canDelete } from "@/lib/permissions";
+import { RequireProjectsModule } from "@/components/require-projects-module";
 import { formatCurrency } from "@/lib/utils";
 import { Loader2, Upload, ArrowRight } from "lucide-react";
 
@@ -66,9 +67,14 @@ export default function ProjectDetailPage() {
   const totalEst = items.reduce((s, i) => s + i.totalEstimated, 0);
   const totalExec = items.reduce((s, i) => s + i.totalExecuted, 0);
 
-  if (loading) return <AppShell title="تفاصيل المشروع"><div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin spinner-brand" /></div></AppShell>;
+  if (loading) return (
+    <RequireProjectsModule>
+      <AppShell title="تفاصيل المشروع"><div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin spinner-brand" /></div></AppShell>
+    </RequireProjectsModule>
+  );
 
   return (
+    <RequireProjectsModule>
     <AppShell title={project?.name ?? "تفاصيل المشروع"}>
       <Link href="/projects" className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-blue-400 mb-6">
         <ArrowRight className="h-4 w-4" /> العودة للمشاريع
@@ -177,5 +183,6 @@ export default function ProjectDetailPage() {
         setDeleteId(null); load();
       }} message="حذف هذا البند؟" />
     </AppShell>
+    </RequireProjectsModule>
   );
 }

@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, Textarea, FormActions, ConfirmDialog, Btn, NumberInput } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
-import { api, type PettyCash, type Project } from "@/lib/api";
+import { api, type PettyCash, type ProjectPickerOption } from "@/lib/api";
 import { canCreate, canDelete, canSettlePettyCash, canUsePettyCash } from "@/lib/permissions";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -15,7 +15,7 @@ type AssignableUser = { id: number; name: string; role: string };
 export default function PettyCashPage() {
   const { token, user } = useAuth();
   const [rows, setRows] = useState<PettyCash[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectPickerOption[]>([]);
   const [assignable, setAssignable] = useState<AssignableUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
@@ -33,7 +33,7 @@ export default function PettyCashPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const [pc, proj] = await Promise.all([api.pettyCash(token).list(), api.projects(token).list()]);
+      const [pc, proj] = await Promise.all([api.pettyCash(token).list(), api.projects(token).picker()]);
       setRows(pc); setProjects(proj);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }

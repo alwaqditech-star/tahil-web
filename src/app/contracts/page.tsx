@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, Textarea, FormActions, Btn, NumberInput } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
-import { api, type Contract, type Contractor, type Project, type ProjectItem, type CatalogItem } from "@/lib/api";
+import { api, type Contract, type Contractor, type ProjectPickerOption, type ProjectItem, type CatalogItem } from "@/lib/api";
 import { canCreate } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/utils";
 import { Loader2, Plus, X } from "lucide-react";
@@ -19,7 +19,7 @@ export default function ContractsPage() {
   const { token, user } = useAuth();
   const [rows, setRows] = useState<Contract[]>([]);
   const [contractors, setContractors] = useState<Contractor[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectPickerOption[]>([]);
   const [boqItems, setBoqItems] = useState<ProjectItem[]>([]);
   const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [pickerTab, setPickerTab] = useState<"boq" | "catalog">("boq");
@@ -38,7 +38,7 @@ export default function ContractsPage() {
     Promise.all([
       api.contracts(token).list(),
       api.contractors(token).list(),
-      api.projects(token).list(),
+      api.projects(token).picker(),
     ]).then(([c, co, p]) => { setRows(c); setContractors(co); setProjects(p); })
       .catch(console.error).finally(() => setLoading(false));
   }, [token]);

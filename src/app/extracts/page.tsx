@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, Textarea, Btn, ConfirmDialog } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
-import { api, type Extract, type Project, type Contractor, type SmartExtractItem } from "@/lib/api";
+import { api, type Extract, type ProjectPickerOption, type Contractor, type SmartExtractItem } from "@/lib/api";
 import {
   canCreate, canDelete, canApproveExtractManager, canApproveExtractAccountant,
 } from "@/lib/permissions";
@@ -49,7 +49,7 @@ function exportExtractsCsv(rows: Extract[]) {
 export default function ExtractsPage() {
   const { token, user } = useAuth();
   const [rows, setRows] = useState<Extract[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectPickerOption[]>([]);
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
@@ -75,7 +75,7 @@ export default function ExtractsPage() {
     try {
       const [ext, proj, cont] = await Promise.all([
         api.extracts(token).list(),
-        api.projects(token).list(),
+        api.projects(token).picker(),
         api.contractors(token).list(),
       ]);
       setRows(ext);

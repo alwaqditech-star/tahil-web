@@ -1,3 +1,11 @@
+export function canViewProjectsModule(role: string): boolean {
+  return role === "admin" || role === "project_manager" || role === "site_supervisor";
+}
+
+export function canPickProject(role: string): boolean {
+  return canViewProjectsModule(role) || role === "accountant";
+}
+
 export function canCreate(role: string, resource: string): boolean {
   const map: Record<string, string[]> = {
     projects: ["admin"],

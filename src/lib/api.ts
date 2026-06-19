@@ -62,6 +62,8 @@ export type User = {
   role: string; department: string | null; assignedProjectId: number | null; assignedProjectIds: number[];
 };
 
+export type ProjectPickerOption = { id: number; name: string };
+
 export type Project = {
   id: number; name: string; description: string | null; client: string;
   location: string | null; status: string; startDate: string | null; endDate: string | null;
@@ -363,7 +365,10 @@ export const api = {
     fd.append("file", file);
     return apiFetch<{ url: string; filename: string }>("/api/upload", { method: "POST", token, body: fd });
   },
-  projects: (token: string) => crud<Project>("/api/projects", token),
+  projects: (token: string) => ({
+    ...crud<Project>("/api/projects", token),
+    picker: () => apiFetch<ProjectPickerOption[]>("/api/projects?picker=true", { token }),
+  }),
   projectItems: (token: string, projectId: number) => ({
     list: () => apiFetch<ProjectItem[]>(`/api/project-items?projectId=${projectId}`, { token }),
     create: (body: unknown) => apiFetch<ProjectItem>("/api/project-items", { method: "POST", token, body: JSON.stringify({ ...body as object, projectId }) }),

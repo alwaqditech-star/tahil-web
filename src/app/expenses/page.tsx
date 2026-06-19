@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, FormActions, RowActions, PageToolbar, ConfirmDialog, Btn, NumberInput } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
-import { api, uploadsUrl, type Expense, type Project, type ExpenseCategory, type ContractItem } from "@/lib/api";
+import { api, uploadsUrl, type Expense, type ProjectPickerOption, type ExpenseCategory, type ContractItem } from "@/lib/api";
 import { canCreate, canEdit, canDelete, canManagerApproveExpense, canAccountantApproveExpense } from "@/lib/permissions";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -13,7 +13,7 @@ import { Loader2 } from "lucide-react";
 export default function ExpensesPage() {
   const { token, user } = useAuth();
   const [rows, setRows] = useState<Expense[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectPickerOption[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [contractItems, setContractItems] = useState<ContractItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +32,7 @@ export default function ExpensesPage() {
     setLoading(true);
     try {
       const [exp, proj, cats] = await Promise.all([
-        api.expenses(token).list(), api.projects(token).list(), api.expenseCategories(token),
+        api.expenses(token).list(), api.projects(token).picker(), api.expenseCategories(token),
       ]);
       setRows(exp); setProjects(proj); setCategories(cats);
     } catch (e) { console.error(e); }

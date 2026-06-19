@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api, type User } from "@/lib/api";
+import { canViewProjectsModule } from "@/lib/permissions";
 
 type AuthContextType = {
   user: User | null;
@@ -15,6 +16,7 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const PUBLIC_PATHS = ["/login"];
+const PROJECTS_MODULE_PATH = /^\/projects(\/|$)/;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -35,6 +37,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((u) => {
         setUser(u);
         if (pathname === "/login") router.replace("/");
+        else if (PROJECTS_MODULE_PATH.test(pathname) && !canViewProjectsModule(u.role)) {
+          router.replace("/");
+        }
       })
       .catch(() => {
         localStorage.removeItem("jade_token");

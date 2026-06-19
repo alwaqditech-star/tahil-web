@@ -6,12 +6,13 @@ import { StatCard } from "@/components/ui/stat-card";
 import { PanelCard } from "@/components/ui/panel-card";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type DashboardStats } from "@/lib/api";
+import { canViewProjectsModule } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/utils";
 import { HardHat, TrendingUp, Loader2, CheckSquare, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
 export default function DashboardPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +121,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex shrink-0 items-center justify-between gap-4 sm:flex-col sm:items-end">
                   <p className="text-sm font-semibold tabular-nums text-emerald-400">{formatCurrency(p.contractValue)}</p>
-                  <Link href="/projects" className="text-xs erp-link-brand">عرض</Link>
+                  {canViewProjectsModule(user?.role ?? "") && (
+                    <Link href={`/projects/${p.projectId}`} className="text-xs erp-link-brand">عرض</Link>
+                  )}
                 </div>
               </div>
             ))}

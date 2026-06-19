@@ -8,6 +8,7 @@ import { Modal, Btn, Field, Input, Select, Textarea, FormActions, RowActions, Pa
 import { useAuth } from "@/contexts/auth-context";
 import { api, type Project } from "@/lib/api";
 import { canCreate, canEdit, canDelete } from "@/lib/permissions";
+import { RequireProjectsModule } from "@/components/require-projects-module";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
@@ -71,6 +72,7 @@ export default function ProjectsPage() {
   const role = user?.role ?? "";
 
   return (
+    <RequireProjectsModule>
     <AppShell title="إدارة المشاريع">
       <PageToolbar onAdd={canCreate(role, "projects") ? openAdd : undefined} addLabel="مشروع جديد" />
       {loading ? (
@@ -140,5 +142,6 @@ export default function ProjectsPage() {
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={onDelete} message="هل أنت متأكد من حذف هذا المشروع؟" loading={saving} />
     </AppShell>
+    </RequireProjectsModule>
   );
 }
