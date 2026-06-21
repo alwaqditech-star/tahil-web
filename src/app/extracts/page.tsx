@@ -8,8 +8,9 @@ import { Modal, Field, Input, Select, Textarea, Btn, ConfirmDialog } from "@/com
 import { useAuth } from "@/contexts/auth-context";
 import { api, type Extract, type ProjectPickerOption, type Contractor, type SmartExtractItem } from "@/lib/api";
 import {
-  canCreate, canDelete, canApproveExtractManager, canApproveExtractAccountant,
+  canCreate, canDelete, canApproveExtractManager, canApproveExtractAccountant, canViewExtracts,
 } from "@/lib/permissions";
+import { RequireRole } from "@/components/require-role";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import {
   Loader2, Eye, ArrowUpCircle, CheckCircle, DollarSign, Download, Plus, X,
@@ -216,6 +217,7 @@ export default function ExtractsPage() {
   const role = user?.role ?? "";
 
   return (
+    <RequireRole allow={canViewExtracts}>
     <AppShell title="إدارة المستخلصات">
       <div className="mb-6 flex flex-wrap gap-3 justify-end">
         <Btn variant="secondary" onClick={() => rows.length ? exportExtractsCsv(rows) : showToast("لا توجد بيانات")}>
@@ -470,5 +472,6 @@ export default function ExtractsPage() {
         </div>
       )}
     </AppShell>
+    </RequireRole>
   );
 }

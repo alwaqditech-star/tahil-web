@@ -117,6 +117,7 @@ export default function UsersPage() {
                 <option value="project_manager">مدير مشاريع</option>
                 <option value="accountant">محاسب</option>
                 <option value="site_supervisor">مشرف موقع</option>
+                <option value="project_engineer">مهندس مشروع</option>
               </Select>
             </Field>
             <Field label="القسم"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>

@@ -213,7 +213,8 @@ export type ProjectReport = {
     contractValue: number; budgetAllocated: number; progressPercent: number;
   };
   summary: {
-    totalExpenses: number; totalExtracts: number; paidExtracts: number; profitMargin: number;
+    totalExpenses: number; totalExpensesAll: number; pendingExpenses: number; paidExpenses: number;
+    totalExtracts: number; paidExtracts: number; profitMargin: number;
     itemsCount: number; budgetConsumptionPercent: number; totalPurchases: number; pettyCashUsed: number;
   };
   expensesByCategory: Array<{ category: string; amount: number; percent: number; color: string }>;
@@ -405,6 +406,11 @@ export const api = {
     list: (params?: { active?: boolean }) => {
       const q = params?.active ? "?active=true" : "";
       return apiFetch<CatalogItem[]>(`/api/catalog-items${q}`, { token });
+    },
+    importExcel: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return apiFetch<{ inserted: number }>("/api/catalog-items/import", { method: "POST", token, body: fd });
     },
   }),
   suppliers: (token: string) => crud<Supplier>("/api/suppliers", token),

@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
-import { Modal, Field, Input, Select, FormActions, RowActions, PageToolbar, ConfirmDialog, Btn, NumberInput } from "@/components/crud/ui";
+import { Modal, Field, Input, Select, FormActions, RowActions, ConfirmDialog, Btn, NumberInput } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { api, uploadsUrl, type Expense, type ProjectPickerOption, type ExpenseCategory, type ContractItem } from "@/lib/api";
-import { canCreate, canEdit, canDelete, canManagerApproveExpense, canAccountantApproveExpense } from "@/lib/permissions";
+import { canCreate, canEdit, canDelete, canManagerApproveExpense, canAccountantApproveExpense, canPrintExpensePdf, isFieldRole } from "@/lib/permissions";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { printExpensePdf, printAllExpensesPdf } from "@/lib/expense-pdf";
+import { Loader2, Printer, Eye } from "lucide-react";
 
 export default function ExpensesPage() {
   const { token, user } = useAuth();
@@ -26,6 +27,7 @@ export default function ExpensesPage() {
   const [editId, setEditId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -128,11 +130,20 @@ export default function ExpensesPage() {
   };
 
   const role = user?.role ?? "";
-  const isSupervisor = role === "site_supervisor";
+  const isFieldUser = isFieldRole(role);
 
   return (
     <AppShell title="إدارة المصروفات">
-      <PageToolbar onAdd={canCreate(role, "expenses") ? openAdd : undefined} addLabel="مصروف جديد" />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        {canCreate(role, "expenses") && (
+          <Btn onClick={openAdd}>+ مصروف جديد</Btn>
+        )}
+        {canPrintExpensePdf(role) && rows.length > 0 && (
+          <Btn variant="secondary" onClick={() => printAllExpensesPdf(rows)}>
+            <Printer className="h-4 w-4" /> طباعة PDF (الكل)
+          </Btn>
+        )}
+      </div>
       {loading ? (
         <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin spinner-brand" /></div>
       ) : (
@@ -164,10 +175,20 @@ export default function ExpensesPage() {
                     <td className="p-4 text-slate-500">{formatDate(e.expenseDate)}</td>
                     <td className="p-4">
                       {e.attachmentUrl ? (
-                        <a href={uploadsUrl(e.attachmentUrl)} target="_blank" rel="noreferrer" className="erp-link text-xs">عرض</a>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => setPreviewUrl(uploadsUrl(e.attachmentUrl!))} className="erp-link text-xs inline-flex items-center gap-1">
+                            <Eye className="h-3 w-3" /> معاينة
+                          </button>
+                        </div>
                       ) : "—"}
                     </td>
                     <td className="p-4">
+                      <div className="flex flex-wrap items-center gap-1">
+                      {canPrintExpensePdf(role) && (
+                        <Btn variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => printExpensePdf(e)}>
+                          <Printer className="h-3 w-3" /> PDF
+                        </Btn>
+                      )}
                       <RowActions
                         showApprove={canManagerApproveExpense(role) && e.status === "pending"}
                         onApprove={() => approve(e.id, "manager_approve")}
@@ -178,6 +199,7 @@ export default function ExpensesPage() {
                       {canAccountantApproveExpense(role) && e.status === "manager_approved" && (
                         <Btn variant="success" onClick={() => approve(e.id, "accountant_approve")} className="!px-2 !py-1 text-xs mr-1">اعتماد محاسب</Btn>
                       )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -195,7 +217,7 @@ export default function ExpensesPage() {
               value={form.projectId}
               onChange={(e) => setForm({ ...form, projectId: Number(e.target.value), contractorId: 0, projectItemId: 0 })}
               required
-              disabled={isSupervisor}
+              disabled={isFieldUser}
             >
               {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
@@ -248,15 +270,31 @@ export default function ExpensesPage() {
           </div>
           <Field label="التاريخ" required><Input type="date" value={form.expenseDate} onChange={(e) => setForm({ ...form, expenseDate: e.target.value })} required /></Field>
           <Field label="الوصف"><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
-          <Field label="مرفق (فاتورة/صورة)">
+          <Field label="مرفق (فاتورة / سند صرف)">
             <input type="file" accept="image/*,.pdf" onChange={onUpload} className="text-sm text-slate-400" />
-            {form.attachmentUrl && <p className="text-xs text-emerald-400 mt-1">تم رفع المرفق ✓</p>}
+            {form.attachmentUrl && (
+              <div className="mt-2 flex gap-2">
+                <p className="text-xs text-emerald-400">تم رفع المرفق ✓</p>
+                <button type="button" className="erp-link text-xs" onClick={() => setPreviewUrl(uploadsUrl(form.attachmentUrl))}>معاينة</button>
+              </div>
+            )}
           </Field>
           <FormActions onCancel={() => setModal(false)} loading={saving} />
         </form>
       </Modal>
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={onDelete} message="هل أنت متأكد من حذف هذا المصروف؟" loading={saving} />
+
+      <Modal open={!!previewUrl} onClose={() => setPreviewUrl(null)} title="معاينة المرفق" wide>
+        {previewUrl && (
+          previewUrl.toLowerCase().includes(".pdf") ? (
+            <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg border border-white/10" title="مرفق PDF" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="مرفق" className="max-h-[70vh] mx-auto rounded-lg" />
+          )
+        )}
+      </Modal>
     </AppShell>
   );
 }

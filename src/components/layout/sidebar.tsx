@@ -10,21 +10,24 @@ import {
 import { BrandMark } from "./brand-logo";
 import { cn, ROLE_LABELS } from "@/lib/utils";
 import { useAuth } from "@/contexts/auth-context";
+import {
+  canViewExtracts, canViewContracts, canViewReports, canViewProjectsModule,
+} from "@/lib/permissions";
 
 const navItems = [
-  { href: "/", label: "لوحة التحكم", icon: LayoutDashboard, roles: ["admin", "project_manager", "accountant", "site_supervisor"] },
-  { href: "/projects", label: "المشاريع", icon: HardHat, roles: ["admin", "project_manager", "site_supervisor"] },
-  { href: "/catalog-items", label: "دليل البنود", icon: ListChecks, roles: ["admin", "project_manager", "accountant"] },
-  { href: "/expenses", label: "المصروفات", icon: Receipt, roles: ["admin", "project_manager", "accountant", "site_supervisor"] },
-  { href: "/petty-cash", label: "العهد", icon: Wallet, roles: ["admin", "project_manager", "accountant", "site_supervisor"] },
-  { href: "/extracts", label: "المستخلصات", icon: FileText, roles: ["admin", "project_manager", "accountant"] },
-  { href: "/contractors", label: "المقاولين", icon: Wrench, roles: ["admin", "project_manager"] },
-  { href: "/contracts", label: "العقود", icon: FileSignature, roles: ["admin", "project_manager", "accountant"] },
-  { href: "/tasks", label: "المهام", icon: CheckSquare, roles: ["admin", "project_manager", "accountant", "site_supervisor"] },
-  { href: "/suppliers", label: "الموردين", icon: Truck, roles: ["admin", "project_manager", "accountant"] },
-  { href: "/purchases", label: "المشتريات", icon: ShoppingCart, roles: ["admin", "project_manager", "accountant"] },
-  { href: "/reports", label: "التقارير", icon: PieChart, roles: ["admin", "accountant", "project_manager"] },
-  { href: "/users", label: "المستخدمين", icon: Users, roles: ["admin"] },
+  { href: "/", label: "لوحة التحكم", icon: LayoutDashboard, show: () => true },
+  { href: "/projects", label: "المشاريع", icon: HardHat, show: (r: string) => canViewProjectsModule(r) },
+  { href: "/catalog-items", label: "دليل البنود", icon: ListChecks, show: (r: string) => ["admin", "project_manager", "accountant"].includes(r) },
+  { href: "/expenses", label: "المصروفات", icon: Receipt, show: (r: string) => ["admin", "project_manager", "accountant", "site_supervisor", "project_engineer"].includes(r) },
+  { href: "/petty-cash", label: "العهد", icon: Wallet, show: (r: string) => ["admin", "project_manager", "accountant", "site_supervisor", "project_engineer"].includes(r) },
+  { href: "/extracts", label: "المستخلصات", icon: FileText, show: (r: string) => canViewExtracts(r) },
+  { href: "/contractors", label: "المقاولين", icon: Wrench, show: (r: string) => ["admin", "project_manager"].includes(r) },
+  { href: "/contracts", label: "العقود", icon: FileSignature, show: (r: string) => canViewContracts(r) },
+  { href: "/tasks", label: "المهام", icon: CheckSquare, show: (r: string) => ["admin", "project_manager", "accountant", "site_supervisor", "project_engineer"].includes(r) },
+  { href: "/suppliers", label: "الموردين", icon: Truck, show: (r: string) => ["admin", "project_manager", "accountant"].includes(r) },
+  { href: "/purchases", label: "المشتريات", icon: ShoppingCart, show: (r: string) => ["admin", "project_manager", "accountant"].includes(r) },
+  { href: "/reports", label: "التقارير", icon: PieChart, show: (r: string) => canViewReports(r) },
+  { href: "/users", label: "المستخدمين", icon: Users, show: (r: string) => r === "admin" },
 ];
 
 const sidebarShell =
@@ -33,7 +36,7 @@ const sidebarShell =
 function SidebarContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const filtered = navItems.filter((item) => user && item.roles.includes(user.role));
+  const filtered = navItems.filter((item) => user && item.show(user.role));
 
   return (
     <>

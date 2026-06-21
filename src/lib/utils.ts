@@ -45,4 +45,5 @@ export const ROLE_LABELS: Record<string, string> = {
   project_manager: "مدير مشاريع",
   accountant: "محاسب",
   site_supervisor: "مشرف موقع",
+  project_engineer: "مهندس مشروع",
 };

@@ -6,7 +6,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { PanelCard } from "@/components/ui/panel-card";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type DashboardStats } from "@/lib/api";
-import { canViewProjectsModule } from "@/lib/permissions";
+import { canViewProjectsModule, canViewFinancialData } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/utils";
 import { HardHat, TrendingUp, Loader2, CheckSquare, RefreshCw } from "lucide-react";
 import Link from "next/link";
@@ -68,41 +68,57 @@ export default function DashboardPage() {
     );
   }
 
+  const role = user?.role ?? "";
+  const showFinancial = canViewFinancialData(role);
+
   return (
     <AppShell title="لوحة التحكم">
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="المشاريع النشطة"
-          value={stats.activeProjects}
-          subtitle={`${stats.delayedProjects ?? 0} متأخرة — ${stats.totalProjects} إجمالي`}
-          icon={HardHat}
-          accent="success"
-        />
-        <StatCard
-          title="قيمة العقود"
-          value={formatCurrency(stats.totalContractValue)}
-          subtitle="إجمالي جميع المشاريع"
-          icon={TrendingUp}
-          accent="brand"
-        />
-        <StatCard
-          title="الربح المتوقع"
-          value={formatCurrency(stats.expectedProfit ?? 0)}
-          subtitle={`هامش ${stats.overallProfitMargin.toFixed(1)}%`}
-          icon={TrendingUp}
-          accent="success"
-          valueTone="positive"
-        />
+        {showFinancial ? (
+          <>
+            <StatCard
+              title="المشاريع النشطة"
+              value={stats.activeProjects}
+              subtitle={`${stats.delayedProjects ?? 0} متأخرة — ${stats.totalProjects} إجمالي`}
+              icon={HardHat}
+              accent="success"
+            />
+            <StatCard
+              title="قيمة العقود"
+              value={formatCurrency(stats.totalContractValue)}
+              subtitle="إجمالي جميع المشاريع"
+              icon={TrendingUp}
+              accent="brand"
+            />
+            <StatCard
+              title="الربح المتوقع"
+              value={formatCurrency(stats.expectedProfit ?? 0)}
+              subtitle={`هامش ${stats.overallProfitMargin.toFixed(1)}%`}
+              icon={TrendingUp}
+              accent="success"
+              valueTone="positive"
+            />
+          </>
+        ) : (
+          <StatCard
+            title="المشاريع النشطة"
+            value={stats.activeProjects}
+            subtitle={`${stats.delayedProjects ?? 0} متأخرة`}
+            icon={HardHat}
+            accent="success"
+          />
+        )}
         <StatCard
           title="مهامي المفتوحة"
           value={stats.myTasksCount ?? 0}
-          subtitle={`${stats.pendingExpensesCount} مصروف + ${stats.pendingExtractsCount} مستخلص معلق`}
+          subtitle={showFinancial ? `${stats.pendingExpensesCount} مصروف + ${stats.pendingExtractsCount} مستخلص معلق` : `${stats.pendingExpensesCount} مصروف معلق`}
           icon={CheckSquare}
           accent="warning"
         />
       </div>
 
       <div className="mb-6 grid gap-6 lg:grid-cols-3">
+        {showFinancial && (
         <PanelCard title="أبرز المشاريع" className="lg:col-span-2">
           <div className="space-y-3">
             {stats.topProjects.map((p) => (
@@ -116,12 +132,15 @@ export default function DashboardPage() {
                     <div className="progress-bar-fill" style={{ width: `${p.progressPercent}%` }} />
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
-                    إنجاز {p.progressPercent}% — هامش {p.profitMargin?.toFixed(1)}%
+                    إنجاز {p.progressPercent}%
+                    {showFinancial ? ` — هامش ${p.profitMargin?.toFixed(1)}%` : ""}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center justify-between gap-4 sm:flex-col sm:items-end">
-                  <p className="text-sm font-semibold tabular-nums text-emerald-400">{formatCurrency(p.contractValue)}</p>
-                  {canViewProjectsModule(user?.role ?? "") && (
+                  {showFinancial && (
+                    <p className="text-sm font-semibold tabular-nums text-emerald-400">{formatCurrency(p.contractValue)}</p>
+                  )}
+                  {canViewProjectsModule(role) && (
                     <Link href={`/projects/${p.projectId}`} className="text-xs erp-link-brand">عرض</Link>
                   )}
                 </div>
@@ -132,7 +151,9 @@ export default function DashboardPage() {
             )}
           </div>
         </PanelCard>
+        )}
 
+        {showFinancial && (
         <PanelCard title="نظرة مالية">
           <div className="space-y-1">
             {[
@@ -149,8 +170,10 @@ export default function DashboardPage() {
             ))}
           </div>
         </PanelCard>
+        )}
       </div>
 
+      {showFinancial ? (
       <div className="grid gap-6 lg:grid-cols-3">
         <PanelCard title="أكثر البنود ربحاً">
           {(stats.topProfitableItems ?? []).map((i, idx) => (
@@ -193,6 +216,19 @@ export default function DashboardPage() {
           )}
         </PanelCard>
       </div>
+      ) : (
+        <PanelCard title="آخر العمليات">
+          {(stats.recentExpenses ?? []).slice(0, 5).map((e) => (
+            <div key={e.id} className="border-b border-white/5 py-2.5 last:border-0">
+              <p className="truncate text-sm text-white">{e.title}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{e.status}</p>
+            </div>
+          ))}
+          {!(stats.recentExpenses?.length) && (
+            <p className="text-sm text-slate-500">لا توجد عمليات حديثة</p>
+          )}
+        </PanelCard>
+      )}
     </AppShell>
   );
 }

@@ -6,7 +6,8 @@ import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, Textarea, FormActions, Btn, NumberInput } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type Contract, type Contractor, type ProjectPickerOption, type ProjectItem, type CatalogItem } from "@/lib/api";
-import { canCreate } from "@/lib/permissions";
+import { canCreate, canViewContracts } from "@/lib/permissions";
+import { RequireRole } from "@/components/require-role";
 import { formatCurrency } from "@/lib/utils";
 import { Loader2, Plus, X } from "lucide-react";
 
@@ -129,6 +130,7 @@ export default function ContractsPage() {
   const role = user?.role ?? "";
 
   return (
+    <RequireRole allow={canViewContracts}>
     <AppShell title="عقود المقاولين">
       {canCreate(role, "contractors") && (
         <div className="mb-6 flex justify-end">
@@ -269,5 +271,6 @@ export default function ContractsPage() {
         </div>
       </Modal>
     </AppShell>
+    </RequireRole>
   );
 }

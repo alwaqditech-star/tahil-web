@@ -11,7 +11,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { api, type CatalogItem } from "@/lib/api";
 import { canCreate, canEdit, canDelete } from "@/lib/permissions";
 import { formatCurrency } from "@/lib/utils";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, Upload } from "lucide-react";
 
 const empty = (): Partial<CatalogItem> => ({
   code: "", name: "", unit: "", defaultUnitPrice: 0, defaultEstimatedPrice: 0,
@@ -59,6 +59,32 @@ export default function CatalogItemsPage() {
         onAdd={canCreate(role, "catalogItems") ? () => { setEditId(null); setForm(empty()); setModal(true); } : undefined}
         addLabel="بند جديد"
       />
+
+      {canCreate(role, "catalogItems") && (
+        <div className="mb-4">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 hover:bg-white/10">
+            <Upload className="h-4 w-4" />
+            استيراد من Excel
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file || !token) return;
+                try {
+                  const r = await api.catalogItems(token).importExcel(file);
+                  alert(`تم استيراد ${r.inserted} بند`);
+                  load();
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "خطأ");
+                }
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+      )}
 
       <div className="relative mb-4 max-w-md">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />

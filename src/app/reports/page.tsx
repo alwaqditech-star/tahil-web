@@ -1,13 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
+import { RequireRole } from "@/components/require-role";
+import { canViewReports } from "@/lib/permissions";
 import { StatCard } from "@/components/ui/stat-card";
 import { PanelCard } from "@/components/ui/panel-card";
 import { CHART, ChartTooltip, formatAxisValue } from "@/components/ui/charts";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type FinancialReport, type ProjectReport, type ContractorReport, type SupplierReport, type ExpenseReport, type ExpenseReportFilters, type ExtractReport, type ExtractReportFilters, type PettyCashReport } from "@/lib/api";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
+import {
+  printContractorReportPdf, printExpenseReportPdf, printExtractReportPdf,
+  printFinancialOverviewPdf, printPettyCashReportPdf, printProjectReportPdf, printSupplierReportPdf,
+} from "@/lib/report-pdf";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import {
   LineChart, Line, PieChart, Pie, Cell, BarChart, Bar,
@@ -16,8 +22,38 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Loader2, RefreshCw, Filter,
   Wallet, Download, Hash, FileText, Wrench, Clock, Banknote, Building2,
-  HardHat, Phone, Mail, Package, Receipt, Layers,
+  HardHat, Phone, Mail, Package, Receipt, Layers, Printer,
 } from "lucide-react";
+
+function matchesSearch(text: string, query: string) {
+  if (!query.trim()) return true;
+  return text.toLowerCase().includes(query.trim().toLowerCase());
+}
+
+function ExportActions({ onCsv, onPdf, disabled }: { onCsv: () => void; onPdf: () => void; disabled?: boolean }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={onCsv}
+        disabled={disabled}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
+      >
+        <Download className="h-3.5 w-3.5" />
+        Excel
+      </button>
+      <button
+        type="button"
+        onClick={onPdf}
+        disabled={disabled}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
+      >
+        <Printer className="h-3.5 w-3.5" />
+        PDF
+      </button>
+    </div>
+  );
+}
 
 const EMPTY_EXPENSE_FILTERS: ExpenseReportFilters = {
   projectId: "all",
@@ -178,6 +214,8 @@ export default function ReportsPage() {
   const [pettyReport, setPettyReport] = useState<PettyCashReport | null>(null);
   const [pettyLoading, setPettyLoading] = useState(false);
   const [pettyError, setPettyError] = useState<string | null>(null);
+  const [entitySearch, setEntitySearch] = useState("");
+  const [rowSearchName, setRowSearchName] = useState("");
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -284,6 +322,11 @@ export default function ReportsPage() {
     }
   }, [token]);
 
+  useEffect(() => {
+    setRowSearchName("");
+    setEntitySearch("");
+  }, [tab]);
+
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
@@ -352,7 +395,41 @@ export default function ReportsPage() {
     ? "جميع المشاريع"
     : data?.projectsList.find((p) => p.id === projectId)?.name ?? "مشروع محدد";
 
+  const filteredProjectsList = useMemo(
+    () => (data?.projectsList ?? []).filter((p) => matchesSearch(p.name, entitySearch)),
+    [data, entitySearch],
+  );
+
+  const filteredContractorOptions = useMemo(() => {
+    const list = contractorOptions.length
+      ? contractorOptions
+      : (data?.contractors ?? []).map((c) => ({ id: c.id, name: c.name, companyName: null as string | null }));
+    return list.filter((c) => matchesSearch(c.companyName ? `${c.name} ${c.companyName}` : c.name, entitySearch));
+  }, [contractorOptions, data, entitySearch]);
+
+  const filteredSupplierOptions = useMemo(() => {
+    const list = supplierOptions.length
+      ? supplierOptions
+      : (data?.suppliers ?? []).map((s) => ({ id: s.id, name: s.name, companyName: null as string | null, category: s.category }));
+    return list.filter((s) => matchesSearch(s.companyName ? `${s.name} ${s.companyName}` : s.name, entitySearch));
+  }, [supplierOptions, data, entitySearch]);
+
+  const filteredExpenseRows = useMemo(() => {
+    if (!expenseReport) return [];
+    return expenseReport.rows.filter((e) =>
+      matchesSearch(`${e.title} ${e.projectName} ${e.submittedBy ?? ""}`, rowSearchName),
+    );
+  }, [expenseReport, rowSearchName]);
+
+  const filteredExtractRows = useMemo(() => {
+    if (!extractReport) return [];
+    return extractReport.rows.filter((e) =>
+      matchesSearch(`${e.extractNumber} ${e.title ?? ""} ${e.projectName} ${e.contractorName}`, rowSearchName),
+    );
+  }, [extractReport, rowSearchName]);
+
   return (
+    <RequireRole allow={canViewReports}>
     <AppShell title="التقارير المالية">
       <div className="mb-6">
         <p className="text-sm text-slate-400">
@@ -454,6 +531,16 @@ export default function ReportsPage() {
               />
             </div>
           </div>
+          <div className="mt-4">
+            <label className="mb-1.5 block text-xs text-slate-500">بحث بالاسم</label>
+            <input
+              type="search"
+              value={rowSearchName}
+              onChange={(e) => setRowSearchName(e.target.value)}
+              placeholder="عنوان، مشروع، مقدّم..."
+              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+            />
+          </div>
         </div>
       ) : tab === "extracts" ? (
         <div className="mb-6 glass-card p-4">
@@ -530,6 +617,16 @@ export default function ReportsPage() {
               />
             </div>
           </div>
+          <div className="mt-4">
+            <label className="mb-1.5 block text-xs text-slate-500">بحث بالاسم</label>
+            <input
+              type="search"
+              value={rowSearchName}
+              onChange={(e) => setRowSearchName(e.target.value)}
+              placeholder="رقم، عنوان، مشروع، مقاول..."
+              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+            />
+          </div>
         </div>
       ) : tab === "petty" ? null : (
       <div className="mb-6 glass-card p-4">
@@ -537,13 +634,25 @@ export default function ReportsPage() {
           <Filter className="h-4 w-4" />
           {tab === "projects" ? "اختر المشروع" : tab === "contractors" ? "اختر المقاول" : tab === "suppliers" ? "اختر المورد" : "فلترة حسب المشروع"}
         </label>
+        {tab === "projects" || tab === "contractors" || tab === "suppliers" ? (
+          <div className="mb-3">
+            <label className="mb-1.5 block text-xs text-slate-500">بحث بالاسم</label>
+            <input
+              type="search"
+              value={entitySearch}
+              onChange={(e) => setEntitySearch(e.target.value)}
+              placeholder={tab === "projects" ? "اسم المشروع..." : tab === "contractors" ? "اسم المقاول..." : "اسم المورد..."}
+              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
+            />
+          </div>
+        ) : null}
         {tab === "projects" ? (
           <select
             value={projectReportId ? String(projectReportId) : ""}
             onChange={(e) => setProjectReportId(Number(e.target.value))}
             className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-sm text-white outline-none focus:border-[var(--brand)]"
           >
-            {(data?.projectsList ?? []).map((p) => (
+            {filteredProjectsList.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
@@ -553,7 +662,7 @@ export default function ReportsPage() {
             onChange={(e) => setContractorReportId(Number(e.target.value))}
             className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-sm text-white outline-none focus:border-[var(--brand)]"
           >
-            {(contractorOptions.length ? contractorOptions : (data?.contractors ?? []).map((c) => ({ id: c.id, name: c.name, companyName: null }))).map((c) => (
+            {filteredContractorOptions.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.companyName ? `${c.name} — ${c.companyName}` : c.name}
               </option>
@@ -565,7 +674,7 @@ export default function ReportsPage() {
             onChange={(e) => setSupplierReportId(Number(e.target.value))}
             className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-sm text-white outline-none focus:border-[var(--brand)]"
           >
-            {(supplierOptions.length ? supplierOptions : (data?.suppliers ?? []).map((s) => ({ id: s.id, name: s.name, companyName: null, category: s.category }))).map((s) => (
+            {filteredSupplierOptions.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName ? `${s.name} — ${s.companyName}` : s.name}
               </option>
@@ -613,7 +722,17 @@ export default function ReportsPage() {
       )}
 
       {!loading && data && tab !== "projects" && tab !== "contractors" && tab !== "suppliers" && tab !== "expenses" && tab !== "extracts" && tab !== "petty" && (
-        <>
+          <>
+          <div className="mb-6 flex justify-end">
+            <button
+              type="button"
+              onClick={() => data && printFinancialOverviewPdf(data, filterLabel)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              طباعة PDF
+            </button>
+          </div>
           {/* KPI Cards */}
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
@@ -768,9 +887,19 @@ export default function ReportsPage() {
                       </p>
                     </div>
                   </div>
-                  <Badge variant={statusVariant(projectReport.project.status)}>
-                    {STATUS_LABELS[projectReport.project.status] ?? projectReport.project.status}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => printProjectReportPdf(projectReport)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      PDF
+                    </button>
+                    <Badge variant={statusVariant(projectReport.project.status)}>
+                      {STATUS_LABELS[projectReport.project.status] ?? projectReport.project.status}
+                    </Badge>
+                  </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                   {[
@@ -792,7 +921,10 @@ export default function ReportsPage() {
 
               {/* بطاقات KPI */}
               <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard title="إجمالي المصروفات" value={formatCurrency(projectReport.summary.totalExpenses)} icon={TrendingDown} accent="danger" valueTone="negative" />
+                <StatCard title="مصروفات معتمدة" value={formatCurrency(projectReport.summary.totalExpenses)} icon={TrendingDown} accent="danger" valueTone="negative" />
+                <StatCard title="إجمالي المصروفات" value={formatCurrency(projectReport.summary.totalExpensesAll)} subtitle="كل الحالات" icon={Receipt} accent="warning" valueTone="negative" />
+                <StatCard title="مصروفات معلقة" value={formatCurrency(projectReport.summary.pendingExpenses)} subtitle="غير معتمدة/مدفوعة" icon={Clock} accent="default" />
+                <StatCard title="مصروفات مدفوعة" value={formatCurrency(projectReport.summary.paidExpenses)} icon={TrendingUp} accent="success" valueTone="positive" />
                 <StatCard title="إجمالي المستخلصات" value={formatCurrency(projectReport.summary.totalExtracts)} icon={FileText} accent="info" />
                 <StatCard title="مستخلصات مدفوعة" value={formatCurrency(projectReport.summary.paidExtracts)} icon={TrendingUp} accent="success" valueTone="positive" />
                 <StatCard title="هامش الربح" value={`${projectReport.summary.profitMargin}%`} icon={DollarSign} accent="brand" />
@@ -886,9 +1018,19 @@ export default function ReportsPage() {
                       </p>
                     </div>
                   </div>
-                  <Badge variant={statusVariant(contractorReport.contractor.status)}>
-                    {STATUS_LABELS[contractorReport.contractor.status] ?? contractorReport.contractor.status}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => printContractorReportPdf(contractorReport)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      PDF
+                    </button>
+                    <Badge variant={statusVariant(contractorReport.contractor.status)}>
+                      {STATUS_LABELS[contractorReport.contractor.status] ?? contractorReport.contractor.status}
+                    </Badge>
+                  </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {contractorReport.contractor.phone && (
@@ -1003,9 +1145,19 @@ export default function ReportsPage() {
                       </p>
                     </div>
                   </div>
-                  <Badge variant={statusVariant(supplierReport.supplier.status)}>
-                    {STATUS_LABELS[supplierReport.supplier.status] ?? supplierReport.supplier.status}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => printSupplierReportPdf(supplierReport)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      PDF
+                    </button>
+                    <Badge variant={statusVariant(supplierReport.supplier.status)}>
+                      {STATUS_LABELS[supplierReport.supplier.status] ?? supplierReport.supplier.status}
+                    </Badge>
+                  </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {supplierReport.supplier.phone && (
@@ -1109,21 +1261,17 @@ export default function ReportsPage() {
               <PanelCard
                 title="تفاصيل المصروفات"
                 action={
-                  <button
-                    type="button"
-                    onClick={() => expenseReport.rows.length ? exportExpensesCsv(expenseReport.rows) : undefined}
-                    disabled={expenseReport.rows.length === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    تصدير Excel
-                  </button>
+                  <ExportActions
+                    disabled={filteredExpenseRows.length === 0}
+                    onCsv={() => exportExpensesCsv(filteredExpenseRows)}
+                    onPdf={() => expenseReport && printExpenseReportPdf({ ...expenseReport, rows: filteredExpenseRows })}
+                  />
                 }
               >
                 <DataTable
                   headers={["التاريخ", "العنوان", "المشروع", "التصنيف", "المبلغ", "الحالة"]}
                   empty="لا توجد مصروفات"
-                  rows={expenseReport.rows.map((e) => [
+                  rows={filteredExpenseRows.map((e) => [
                     formatDate(e.expenseDate),
                     <span key="title" className="font-medium">{e.title}</span>,
                     e.projectName,
@@ -1171,21 +1319,17 @@ export default function ReportsPage() {
               <PanelCard
                 title="تفاصيل المستخلصات"
                 action={
-                  <button
-                    type="button"
-                    onClick={() => extractReport.rows.length ? exportExtractsReportCsv(extractReport.rows) : undefined}
-                    disabled={extractReport.rows.length === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    تصدير Excel
-                  </button>
+                  <ExportActions
+                    disabled={filteredExtractRows.length === 0}
+                    onCsv={() => exportExtractsReportCsv(filteredExtractRows)}
+                    onPdf={() => extractReport && printExtractReportPdf({ ...extractReport, rows: filteredExtractRows })}
+                  />
                 }
               >
                 <DataTable
                   headers={["الرقم", "التاريخ", "المشروع", "المقاول", "المبلغ", "الحالة"]}
                   empty="لا توجد مستخلصات"
-                  rows={extractReport.rows.map((e) => [
+                  rows={filteredExtractRows.map((e) => [
                     e.extractNumber,
                     formatDate(e.extractDate),
                     e.projectName,
@@ -1235,15 +1379,11 @@ export default function ReportsPage() {
               <PanelCard
                 title="العهد حسب الموظف"
                 action={
-                  <button
-                    type="button"
-                    onClick={() => pettyReport.byEmployee.length ? exportPettyCashCsv(pettyReport.byEmployee) : undefined}
+                  <ExportActions
                     disabled={pettyReport.byEmployee.length === 0}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    تصدير Excel
-                  </button>
+                    onCsv={() => exportPettyCashCsv(pettyReport.byEmployee)}
+                    onPdf={() => printPettyCashReportPdf(pettyReport)}
+                  />
                 }
               >
                 <DataTable
@@ -1266,5 +1406,6 @@ export default function ReportsPage() {
         </>
       )}
     </AppShell>
+    </RequireRole>
   );
 }
