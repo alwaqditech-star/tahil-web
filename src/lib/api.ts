@@ -276,6 +276,24 @@ export type ExpenseReport = {
   }>;
 };
 
+export type ReportDateFilters = {
+  projectId?: number | "all";
+  fromDate?: string;
+  toDate?: string;
+  status?: string | "all";
+};
+
+function buildReportQuery(filters: ReportDateFilters = {}, extra: Record<string, string | number> = {}) {
+  const q = new URLSearchParams();
+  if (filters.projectId && filters.projectId !== "all") q.set("projectId", String(filters.projectId));
+  if (filters.fromDate) q.set("fromDate", filters.fromDate);
+  if (filters.toDate) q.set("toDate", filters.toDate);
+  if (filters.status && filters.status !== "all") q.set("status", filters.status);
+  Object.entries(extra).forEach(([k, v]) => q.set(k, String(v)));
+  const qs = q.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export type ExpenseReportFilters = {
   projectId?: number | "all";
   category?: string | "all";
@@ -310,11 +328,22 @@ export type ExtractReportFilters = {
 export type PettyCashReport = {
   filters: { projectId: number | null };
   summary: {
-    totalAllocated: number; totalUsed: number; totalRemaining: number; transactionCount: number;
+    totalAllocated: number; totalUsed: number; totalRemaining: number;
+    transactionCount: number; totalExpenses?: number;
   };
   byEmployee: Array<{
     userId: number; name: string; count: number;
     allocated: number; used: number; remaining: number;
+    expenseTotal: number; expenseCount: number;
+    custodies: Array<{
+      id: number; purpose: string; projectId: number | null; projectName: string;
+      allocatedAmount: number; usedAmount: number; remaining: number;
+      status: string; issuedDate: string;
+    }>;
+    expenses: Array<{
+      id: number; title: string; projectId: number; projectName: string;
+      category: string; amount: number; status: string; expenseDate: string;
+    }>;
   }>;
   projectsList: Array<{ id: number; name: string }>;
 };
@@ -325,16 +354,15 @@ export const api = {
   me: (token: string) => apiFetch<User>("/api/auth/me", { token }),
   dashboard: (token: string) => apiFetch<DashboardStats>("/api/reports/dashboard", { token }),
   reports: {
-    financial: (token: string, projectId?: number | "all") => {
-      const q = projectId && projectId !== "all" ? `?projectId=${projectId}` : "";
-      return apiFetch<FinancialReport>(`/api/reports/financial${q}`, { token, timeoutMs: 60000 });
+    financial: (token: string, filters: ReportDateFilters = {}) => {
+      return apiFetch<FinancialReport>(`/api/reports/financial${buildReportQuery(filters)}`, { token, timeoutMs: 60000 });
     },
-    project: (token: string, projectId: number) =>
-      apiFetch<ProjectReport>(`/api/reports/project?projectId=${projectId}`, { token, timeoutMs: 60000 }),
-    contractor: (token: string, contractorId: number) =>
-      apiFetch<ContractorReport>(`/api/reports/contractor?contractorId=${contractorId}`, { token, timeoutMs: 60000 }),
-    supplier: (token: string, supplierId: number) =>
-      apiFetch<SupplierReport>(`/api/reports/supplier?supplierId=${supplierId}`, { token, timeoutMs: 60000 }),
+    project: (token: string, projectId: number, filters: ReportDateFilters = {}) =>
+      apiFetch<ProjectReport>(`/api/reports/project${buildReportQuery(filters, { projectId })}`, { token, timeoutMs: 60000 }),
+    contractor: (token: string, contractorId: number, filters: ReportDateFilters = {}) =>
+      apiFetch<ContractorReport>(`/api/reports/contractor${buildReportQuery(filters, { contractorId })}`, { token, timeoutMs: 60000 }),
+    supplier: (token: string, supplierId: number, filters: ReportDateFilters = {}) =>
+      apiFetch<SupplierReport>(`/api/reports/supplier${buildReportQuery(filters, { supplierId })}`, { token, timeoutMs: 60000 }),
     expenses: (token: string, filters: ExpenseReportFilters = {}) => {
       const q = new URLSearchParams();
       if (filters.projectId && filters.projectId !== "all") q.set("projectId", String(filters.projectId));
@@ -355,9 +383,8 @@ export const api = {
       const qs = q.toString();
       return apiFetch<ExtractReport>(`/api/reports/extracts${qs ? `?${qs}` : ""}`, { token, timeoutMs: 60000 });
     },
-    pettyCash: (token: string, projectId?: number | "all") => {
-      const q = projectId && projectId !== "all" ? `?projectId=${projectId}` : "";
-      return apiFetch<PettyCashReport>(`/api/reports/petty-cash${q}`, { token, timeoutMs: 60000 });
+    pettyCash: (token: string, filters: ReportDateFilters = {}) => {
+      return apiFetch<PettyCashReport>(`/api/reports/petty-cash${buildReportQuery(filters)}`, { token, timeoutMs: 60000 });
     },
   },
   expenseCategories: (token: string) => apiFetch<ExpenseCategory[]>("/api/expense-categories", { token }),

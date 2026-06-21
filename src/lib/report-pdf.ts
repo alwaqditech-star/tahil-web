@@ -140,3 +140,31 @@ export function printPettyCashReportPdf(report: PettyCashReport) {
     ]),
   );
 }
+
+export function printEmployeePettyReportPdf(employee: PettyCashReport["byEmployee"][number]) {
+  const body = `
+    <p><strong>الموظف:</strong> ${employee.name}</p>
+    <table>${summaryRows([
+      { label: "عدد العهد", value: String(employee.count) },
+      { label: "المخصص", value: formatCurrency(employee.allocated) },
+      { label: "المستخدم", value: formatCurrency(employee.used) },
+      { label: "المتبقي", value: formatCurrency(employee.remaining) },
+      { label: "إجمالي المصروفات", value: formatCurrency(employee.expenseTotal) },
+      { label: "عدد المصروفات", value: String(employee.expenseCount) },
+    ])}</table>
+    <h3 style="margin-top:20px;font-size:14px">سجلات العهد (${employee.custodies.length})</h3>
+    <table>
+      <thead><tr><th>الغرض</th><th>المشروع</th><th>التاريخ</th><th>المخصص</th><th>المستخدم</th><th>المتبقي</th><th>الحالة</th></tr></thead>
+      <tbody>${employee.custodies.map((c) =>
+        `<tr><td>${c.purpose}</td><td>${c.projectName}</td><td>${formatDate(c.issuedDate)}</td><td>${formatCurrency(c.allocatedAmount)}</td><td>${formatCurrency(c.usedAmount)}</td><td>${formatCurrency(c.remaining)}</td><td>${STATUS_LABELS[c.status] ?? c.status}</td></tr>`
+      ).join("")}</tbody>
+    </table>
+    <h3 style="margin-top:20px;font-size:14px">المصروفات (${employee.expenses.length})</h3>
+    <table>
+      <thead><tr><th>التاريخ</th><th>العنوان</th><th>المشروع</th><th>التصنيف</th><th>المبلغ</th><th>الحالة</th></tr></thead>
+      <tbody>${employee.expenses.map((e) =>
+        `<tr><td>${formatDate(e.expenseDate)}</td><td>${e.title}</td><td>${e.projectName}</td><td>${e.category}</td><td>${formatCurrency(e.amount)}</td><td>${STATUS_LABELS[e.status] ?? e.status}</td></tr>`
+      ).join("")}</tbody>
+    </table>`;
+  printHtmlDocument(`تقرير عهد — ${employee.name}`, body);
+}

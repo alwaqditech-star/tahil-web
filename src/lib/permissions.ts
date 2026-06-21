@@ -8,7 +8,7 @@ export function canViewFinancialData(role: string): boolean {
 }
 
 export function canViewProjectsModule(role: string): boolean {
-  return role === "admin" || role === "project_manager" || role === "site_supervisor" || role === "project_engineer";
+  return role === "admin" || role === "project_manager" || role === "site_supervisor" || role === "project_engineer" || role === "accountant";
 }
 
 export function canPickProject(role: string): boolean {
@@ -16,11 +16,11 @@ export function canPickProject(role: string): boolean {
 }
 
 export function canViewExtracts(role: string): boolean {
-  return role === "admin" || role === "project_manager" || role === "project_engineer";
+  return role === "admin" || role === "project_manager" || role === "project_engineer" || role === "accountant";
 }
 
 export function canViewContracts(role: string): boolean {
-  return role === "admin" || role === "project_manager";
+  return role === "admin" || role === "project_manager" || role === "accountant";
 }
 
 export function canViewReports(role: string): boolean {

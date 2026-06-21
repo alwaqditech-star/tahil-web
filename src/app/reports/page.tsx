@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { RequireRole } from "@/components/require-role";
 import { canViewReports } from "@/lib/permissions";
@@ -8,11 +8,11 @@ import { StatCard } from "@/components/ui/stat-card";
 import { PanelCard } from "@/components/ui/panel-card";
 import { CHART, ChartTooltip, formatAxisValue } from "@/components/ui/charts";
 import { useAuth } from "@/contexts/auth-context";
-import { api, type FinancialReport, type ProjectReport, type ContractorReport, type SupplierReport, type ExpenseReport, type ExpenseReportFilters, type ExtractReport, type ExtractReportFilters, type PettyCashReport } from "@/lib/api";
+import { api, type FinancialReport, type ProjectReport, type ContractorReport, type SupplierReport, type ExpenseReport, type ExpenseReportFilters, type ExtractReport, type ExtractReportFilters, type PettyCashReport, type ReportDateFilters } from "@/lib/api";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import {
   printContractorReportPdf, printExpenseReportPdf, printExtractReportPdf,
-  printFinancialOverviewPdf, printPettyCashReportPdf, printProjectReportPdf, printSupplierReportPdf,
+  printFinancialOverviewPdf, printPettyCashReportPdf, printEmployeePettyReportPdf, printProjectReportPdf, printSupplierReportPdf,
 } from "@/lib/report-pdf";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import {
@@ -22,7 +22,7 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Loader2, RefreshCw, Filter,
   Wallet, Download, Hash, FileText, Wrench, Clock, Banknote, Building2,
-  HardHat, Phone, Mail, Package, Receipt, Layers, Printer,
+  HardHat, Phone, Mail, Package, Receipt, Layers, Printer, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 function matchesSearch(text: string, query: string) {
@@ -55,6 +55,8 @@ function ExportActions({ onCsv, onPdf, disabled }: { onCsv: () => void; onPdf: (
   );
 }
 
+const EMPTY_SHARED_FILTERS: ReportDateFilters = { projectId: "all", fromDate: "", toDate: "", status: "all" };
+
 const EMPTY_EXPENSE_FILTERS: ExpenseReportFilters = {
   projectId: "all",
   category: "all",
@@ -84,6 +86,83 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "extracts", label: "المستخلصات" },
   { id: "petty", label: "العهد حسب الموظف" },
 ];
+
+const filterSelectClass = "w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]";
+
+function ReportFiltersCard({
+  onReset,
+  projectId,
+  onProjectChange,
+  projectsList,
+  fromDate,
+  toDate,
+  onFromDateChange,
+  onToDateChange,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
+  children,
+  showProject = true,
+}: {
+  onReset: () => void;
+  projectId: number | "all";
+  onProjectChange: (v: number | "all") => void;
+  projectsList: Array<{ id: number; name: string }>;
+  fromDate: string;
+  toDate: string;
+  onFromDateChange: (v: string) => void;
+  onToDateChange: (v: string) => void;
+  searchValue: string;
+  onSearchChange: (v: string) => void;
+  searchPlaceholder: string;
+  children?: React.ReactNode;
+  showProject?: boolean;
+}) {
+  return (
+    <div className="mb-6 glass-card p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
+          <Filter className="h-4 w-4" />
+          فلاتر التقرير
+        </label>
+        <button type="button" onClick={onReset} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:bg-white/5 hover:text-white">
+          <RefreshCw className="h-3.5 w-3.5" />
+          إعادة تعيين
+        </button>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {showProject && (
+          <div>
+            <label className="mb-1.5 block text-xs text-slate-500">المشروع</label>
+            <select
+              value={projectId === "all" ? "all" : String(projectId)}
+              onChange={(e) => onProjectChange(e.target.value === "all" ? "all" : Number(e.target.value))}
+              className={filterSelectClass}
+            >
+              <option value="all">الكل</option>
+              {projectsList.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div>
+          <label className="mb-1.5 block text-xs text-slate-500">من تاريخ</label>
+          <input type="date" value={fromDate} onChange={(e) => onFromDateChange(e.target.value)} className={filterSelectClass} />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs text-slate-500">إلى تاريخ</label>
+          <input type="date" value={toDate} onChange={(e) => onToDateChange(e.target.value)} className={filterSelectClass} />
+        </div>
+        {children}
+      </div>
+      <div className="mt-4">
+        <label className="mb-1.5 block text-xs text-slate-500">بحث بالاسم</label>
+        <input type="search" value={searchValue} onChange={(e) => onSearchChange(e.target.value)} placeholder={searchPlaceholder} className={filterSelectClass} />
+      </div>
+    </div>
+  );
+}
 
 function exportPettyCashCsv(rows: PettyCashReport["byEmployee"]) {
   const headers = ["الموظف", "عدد العهد", "المخصص", "المستخدم", "المتبقي"];
@@ -185,7 +264,7 @@ function DataTable({
 export default function ReportsPage() {
   const { token } = useAuth();
   const [tab, setTab] = useState<TabId>("overview");
-  const [projectId, setProjectId] = useState<number | "all">("all");
+  const [sharedFilters, setSharedFilters] = useState<ReportDateFilters>(EMPTY_SHARED_FILTERS);
   const [projectReportId, setProjectReportId] = useState<number | null>(null);
   const [contractorReportId, setContractorReportId] = useState<number | null>(null);
   const [supplierReportId, setSupplierReportId] = useState<number | null>(null);
@@ -216,13 +295,14 @@ export default function ReportsPage() {
   const [pettyError, setPettyError] = useState<string | null>(null);
   const [entitySearch, setEntitySearch] = useState("");
   const [rowSearchName, setRowSearchName] = useState("");
+  const [expandedEmployeeId, setExpandedEmployeeId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const report = await api.reports.financial(token, projectId);
+      const report = await api.reports.financial(token, sharedFilters);
       setData(report);
     } catch (err) {
       setData(null);
@@ -230,14 +310,14 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, projectId]);
+  }, [token, sharedFilters]);
 
   const loadProjectReport = useCallback(async (id: number) => {
     if (!token) return;
     setProjectLoading(true);
     setProjectError(null);
     try {
-      const report = await api.reports.project(token, id);
+      const report = await api.reports.project(token, id, sharedFilters);
       setProjectReport(report);
     } catch (err) {
       setProjectReport(null);
@@ -245,14 +325,14 @@ export default function ReportsPage() {
     } finally {
       setProjectLoading(false);
     }
-  }, [token]);
+  }, [token, sharedFilters]);
 
   const loadContractorReport = useCallback(async (id: number) => {
     if (!token) return;
     setContractorLoading(true);
     setContractorError(null);
     try {
-      const report = await api.reports.contractor(token, id);
+      const report = await api.reports.contractor(token, id, sharedFilters);
       setContractorReport(report);
     } catch (err) {
       setContractorReport(null);
@@ -260,14 +340,14 @@ export default function ReportsPage() {
     } finally {
       setContractorLoading(false);
     }
-  }, [token]);
+  }, [token, sharedFilters]);
 
   const loadSupplierReport = useCallback(async (id: number) => {
     if (!token) return;
     setSupplierLoading(true);
     setSupplierError(null);
     try {
-      const report = await api.reports.supplier(token, id);
+      const report = await api.reports.supplier(token, id, sharedFilters);
       setSupplierReport(report);
     } catch (err) {
       setSupplierReport(null);
@@ -275,7 +355,7 @@ export default function ReportsPage() {
     } finally {
       setSupplierLoading(false);
     }
-  }, [token]);
+  }, [token, sharedFilters]);
 
   const loadExpenseReport = useCallback(async (filters: ExpenseReportFilters) => {
     if (!token) return;
@@ -307,12 +387,12 @@ export default function ReportsPage() {
     }
   }, [token]);
 
-  const loadPettyReport = useCallback(async (projectFilter?: number | "all") => {
+  const loadPettyReport = useCallback(async (filters: ReportDateFilters) => {
     if (!token) return;
     setPettyLoading(true);
     setPettyError(null);
     try {
-      const report = await api.reports.pettyCash(token, projectFilter);
+      const report = await api.reports.pettyCash(token, filters);
       setPettyReport(report);
     } catch (err) {
       setPettyReport(null);
@@ -325,6 +405,7 @@ export default function ReportsPage() {
   useEffect(() => {
     setRowSearchName("");
     setEntitySearch("");
+    setExpandedEmployeeId(null);
   }, [tab]);
 
   useEffect(() => { load(); }, [load]);
@@ -346,10 +427,12 @@ export default function ReportsPage() {
   useEffect(() => {
     if (!data?.projectsList.length) return;
     if (tab === "projects") {
-      const id = projectId !== "all" ? projectId : (projectReportId ?? data.projectsList[0].id);
-      if (projectReportId !== id) setProjectReportId(id);
+      const id = sharedFilters.projectId !== "all" && sharedFilters.projectId != null
+        ? sharedFilters.projectId
+        : (projectReportId ?? data.projectsList[0].id);
+      if (id && projectReportId !== id) setProjectReportId(id);
     }
-  }, [tab, data, projectId, projectReportId]);
+  }, [tab, data, sharedFilters.projectId, projectReportId]);
 
   useEffect(() => {
     if (tab === "projects" && projectReportId) loadProjectReport(projectReportId);
@@ -388,12 +471,19 @@ export default function ReportsPage() {
   }, [tab, extractFilters, loadExtractReport]);
 
   useEffect(() => {
-    if (tab === "petty") loadPettyReport("all");
-  }, [tab, loadPettyReport]);
+    if (tab === "petty") loadPettyReport(sharedFilters);
+  }, [tab, loadPettyReport, sharedFilters]);
 
-  const filterLabel = projectId === "all"
+  const filterLabel = sharedFilters.projectId === "all"
     ? "جميع المشاريع"
-    : data?.projectsList.find((p) => p.id === projectId)?.name ?? "مشروع محدد";
+    : data?.projectsList.find((p) => p.id === sharedFilters.projectId)?.name ?? "مشروع محدد";
+
+  const projectsListForFilters = data?.projectsList ?? expenseReport?.projectsList ?? extractReport?.projectsList ?? pettyReport?.projectsList ?? [];
+
+  const filteredPettyEmployees = useMemo(() => {
+    if (!pettyReport) return [];
+    return pettyReport.byEmployee.filter((e) => matchesSearch(e.name, entitySearch));
+  }, [pettyReport, entitySearch]);
 
   const filteredProjectsList = useMemo(
     () => (data?.projectsList ?? []).filter((p) => matchesSearch(p.name, entitySearch)),
@@ -628,86 +718,99 @@ export default function ReportsPage() {
             />
           </div>
         </div>
-      ) : tab === "petty" ? null : (
-      <div className="mb-6 glass-card p-4">
-        <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
-          <Filter className="h-4 w-4" />
-          {tab === "projects" ? "اختر المشروع" : tab === "contractors" ? "اختر المقاول" : tab === "suppliers" ? "اختر المورد" : "فلترة حسب المشروع"}
-        </label>
-        {tab === "projects" || tab === "contractors" || tab === "suppliers" ? (
-          <div className="mb-3">
-            <label className="mb-1.5 block text-xs text-slate-500">بحث بالاسم</label>
-            <input
-              type="search"
-              value={entitySearch}
-              onChange={(e) => setEntitySearch(e.target.value)}
-              placeholder={tab === "projects" ? "اسم المشروع..." : tab === "contractors" ? "اسم المقاول..." : "اسم المورد..."}
-              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-[var(--brand)]"
-            />
-          </div>
-        ) : null}
-        {tab === "projects" ? (
-          <select
-            value={projectReportId ? String(projectReportId) : ""}
-            onChange={(e) => setProjectReportId(Number(e.target.value))}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-sm text-white outline-none focus:border-[var(--brand)]"
-          >
-            {filteredProjectsList.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        ) : tab === "contractors" ? (
-          <select
-            value={contractorReportId ? String(contractorReportId) : ""}
-            onChange={(e) => setContractorReportId(Number(e.target.value))}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-sm text-white outline-none focus:border-[var(--brand)]"
-          >
-            {filteredContractorOptions.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.companyName ? `${c.name} — ${c.companyName}` : c.name}
-              </option>
-            ))}
-          </select>
-        ) : tab === "suppliers" ? (
-          <select
-            value={supplierReportId ? String(supplierReportId) : ""}
-            onChange={(e) => setSupplierReportId(Number(e.target.value))}
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-sm text-white outline-none focus:border-[var(--brand)]"
-          >
-            {filteredSupplierOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.companyName ? `${s.name} — ${s.companyName}` : s.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <>
-            <select
-              value={projectId === "all" ? "all" : String(projectId)}
-              onChange={(e) => setProjectId(e.target.value === "all" ? "all" : Number(e.target.value))}
-              className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-sm text-white outline-none focus:border-[var(--brand)]"
-            >
-              <option value="all">جميع المشاريع</option>
-              {(data?.projectsList ?? []).map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            {projectId !== "all" && (
-              <p className="mt-2 text-xs text-slate-500">عرض بيانات: {filterLabel}</p>
-            )}
-          </>
-        )}
-      </div>
+      ) : (
+        <ReportFiltersCard
+          onReset={() => { setSharedFilters(EMPTY_SHARED_FILTERS); setEntitySearch(""); }}
+          projectId={sharedFilters.projectId ?? "all"}
+          onProjectChange={(v) => setSharedFilters((f) => ({ ...f, projectId: v }))}
+          projectsList={projectsListForFilters}
+          fromDate={sharedFilters.fromDate ?? ""}
+          toDate={sharedFilters.toDate ?? ""}
+          onFromDateChange={(v) => setSharedFilters((f) => ({ ...f, fromDate: v }))}
+          onToDateChange={(v) => setSharedFilters((f) => ({ ...f, toDate: v }))}
+          searchValue={entitySearch}
+          onSearchChange={setEntitySearch}
+          searchPlaceholder={
+            tab === "projects" ? "اسم المشروع..."
+            : tab === "contractors" ? "اسم المقاول..."
+            : tab === "suppliers" ? "اسم المورد..."
+            : tab === "petty" ? "اسم الموظف..."
+            : "بحث..."
+          }
+          showProject={tab !== "projects"}
+        >
+          {tab === "projects" && (
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label className="mb-1.5 block text-xs text-slate-500">المشروع</label>
+              <select
+                value={projectReportId ? String(projectReportId) : ""}
+                onChange={(e) => setProjectReportId(Number(e.target.value))}
+                className={filterSelectClass}
+              >
+                {filteredProjectsList.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {tab === "contractors" && (
+            <>
+              <div className="sm:col-span-2">
+                <label className="mb-1.5 block text-xs text-slate-500">المقاول</label>
+                <select
+                  value={contractorReportId ? String(contractorReportId) : ""}
+                  onChange={(e) => setContractorReportId(Number(e.target.value))}
+                  className={filterSelectClass}
+                >
+                  {filteredContractorOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.companyName ? `${c.name} — ${c.companyName}` : c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-500">حالة المستخلص</label>
+                <select
+                  value={sharedFilters.status ?? "all"}
+                  onChange={(e) => setSharedFilters((f) => ({ ...f, status: e.target.value }))}
+                  className={filterSelectClass}
+                >
+                  <option value="all">الكل</option>
+                  {EXTRACT_STATUSES.map((s) => (
+                    <option key={s} value={s}>{STATUS_LABELS[s] ?? s}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+          {tab === "suppliers" && (
+            <div className="sm:col-span-2 lg:col-span-3">
+              <label className="mb-1.5 block text-xs text-slate-500">المورد</label>
+              <select
+                value={supplierReportId ? String(supplierReportId) : ""}
+                onChange={(e) => setSupplierReportId(Number(e.target.value))}
+                className={filterSelectClass}
+              >
+                {filteredSupplierOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.companyName ? `${s.name} — ${s.companyName}` : s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </ReportFiltersCard>
       )}
 
-      {(loading && tab !== "expenses" && tab !== "extracts" && tab !== "petty") && (
+      {(loading && tab === "overview") && (
         <div className="flex flex-col items-center justify-center gap-3 py-20">
           <Loader2 className="h-8 w-8 animate-spin spinner-brand" />
           <p className="text-sm text-slate-500">جاري تحميل التقرير...</p>
         </div>
       )}
 
-      {!loading && error && tab !== "expenses" && tab !== "extracts" && tab !== "petty" && (
+      {!loading && error && tab === "overview" && (
         <div className="flex flex-col items-center gap-4 py-16 text-center">
           <p className="text-rose-400">{error}</p>
           <button
@@ -1358,7 +1461,7 @@ export default function ReportsPage() {
               <p className="text-rose-400">{pettyError}</p>
               <button
                 type="button"
-                onClick={() => loadPettyReport("all")}
+                onClick={() => loadPettyReport(sharedFilters)}
                 className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand)] px-4 py-2 text-sm text-white"
               >
                 <RefreshCw className="h-4 w-4" />
@@ -1372,7 +1475,7 @@ export default function ReportsPage() {
               <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard title="إجمالي المتبقي" value={formatCurrency(pettyReport.summary.totalRemaining)} icon={TrendingUp} accent="success" valueTone="positive" />
                 <StatCard title="إجمالي المستخدم" value={formatCurrency(pettyReport.summary.totalUsed)} icon={TrendingDown} accent="danger" valueTone="negative" />
-                <StatCard title="إجمالي المخصص" value={formatCurrency(pettyReport.summary.totalAllocated)} subtitle={`${pettyReport.byEmployee.length} موظف`} icon={DollarSign} accent="brand" />
+                <StatCard title="إجمالي المخصص" value={formatCurrency(pettyReport.summary.totalAllocated)} subtitle={`${filteredPettyEmployees.length} موظف`} icon={DollarSign} accent="brand" />
                 <StatCard title="عدد العمليات" value={pettyReport.summary.transactionCount} subtitle="سجل عهد" icon={Wallet} accent="warning" />
               </div>
 
@@ -1380,26 +1483,177 @@ export default function ReportsPage() {
                 title="العهد حسب الموظف"
                 action={
                   <ExportActions
-                    disabled={pettyReport.byEmployee.length === 0}
-                    onCsv={() => exportPettyCashCsv(pettyReport.byEmployee)}
+                    disabled={filteredPettyEmployees.length === 0}
+                    onCsv={() => exportPettyCashCsv(filteredPettyEmployees)}
                     onPdf={() => printPettyCashReportPdf(pettyReport)}
                   />
                 }
               >
-                <DataTable
-                  headers={["الموظف", "عدد العهد", "المخصص", "المستخدم", "المتبقي"]}
-                  empty="لا توجد عهد"
-                  rows={pettyReport.byEmployee.map((p) => [
-                    p.name,
-                    <span key="cnt" className="inline-flex items-center gap-1 tabular-nums text-slate-400">
-                      <Hash className="h-3 w-3" />
-                      {p.count}
-                    </span>,
-                    formatCurrency(p.allocated),
-                    <span key="used" className="text-money-negative">{formatCurrency(p.used)}</span>,
-                    <span key="rem" className="text-money-positive">{formatCurrency(p.remaining)}</span>,
-                  ])}
-                />
+                {filteredPettyEmployees.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-slate-500">لا توجد عهد مطابقة للفلتر</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400">
+                          <th className="w-10 p-3" />
+                          <th className="px-3 py-3 text-right font-medium">الموظف</th>
+                          <th className="px-3 py-3 text-right font-medium">عدد العهد</th>
+                          <th className="px-3 py-3 text-right font-medium">المخصص</th>
+                          <th className="px-3 py-3 text-right font-medium">المستخدم</th>
+                          <th className="px-3 py-3 text-right font-medium">المتبقي</th>
+                          <th className="px-3 py-3 text-right font-medium">المصروفات</th>
+                          <th className="px-3 py-3 text-right font-medium">طباعة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPettyEmployees.map((emp) => (
+                          <Fragment key={emp.userId}>
+                            <tr className={`erp-interactive border-b border-white/5 ${expandedEmployeeId === emp.userId ? "bg-white/5" : ""}`}>
+                              <td className="p-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedEmployeeId(expandedEmployeeId === emp.userId ? null : emp.userId)}
+                                  className="rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white"
+                                >
+                                  {expandedEmployeeId === emp.userId
+                                    ? <ChevronUp className="h-4 w-4" />
+                                    : <ChevronDown className="h-4 w-4" />}
+                                </button>
+                              </td>
+                              <td className="px-3 py-3 font-semibold text-white">{emp.name}</td>
+                              <td className="px-3 py-3 tabular-nums text-slate-300">
+                                <span className="inline-flex items-center gap-1">
+                                  <Hash className="h-3 w-3 text-slate-500" />
+                                  {emp.count}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 tabular-nums text-slate-200">{formatCurrency(emp.allocated)}</td>
+                              <td className="px-3 py-3 tabular-nums text-money-negative">{formatCurrency(emp.used)}</td>
+                              <td className="px-3 py-3 tabular-nums text-money-positive">{formatCurrency(emp.remaining)}</td>
+                              <td className="px-3 py-3 tabular-nums text-slate-300">
+                                {emp.expenseCount > 0
+                                  ? `${emp.expenseCount} — ${formatCurrency(emp.expenseTotal)}`
+                                  : "—"}
+                              </td>
+                              <td className="px-3 py-3">
+                                <button
+                                  type="button"
+                                  onClick={() => printEmployeePettyReportPdf(emp)}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10"
+                                >
+                                  <Printer className="h-3.5 w-3.5" />
+                                  PDF
+                                </button>
+                              </td>
+                            </tr>
+                            {expandedEmployeeId === emp.userId && (
+                              <tr>
+                                <td colSpan={8} className="border-b border-white/5 bg-white/2 p-0">
+                                  <div className="space-y-6 p-5">
+                                    <div>
+                                      <h4 className="mb-3 text-sm font-bold text-white">
+                                        سجلات العهد ({emp.custodies.length})
+                                      </h4>
+                                      {emp.custodies.length === 0 ? (
+                                        <p className="text-sm text-slate-500">لا توجد سجلات عهد</p>
+                                      ) : (
+                                        <div className="overflow-x-auto rounded-xl border border-white/10">
+                                          <table className="w-full min-w-[640px] text-sm">
+                                            <thead>
+                                              <tr className="border-b border-white/10 bg-white/3 text-slate-400">
+                                                <th className="px-3 py-2.5 text-right font-medium">الغرض</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">المشروع</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">التاريخ</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">المخصص</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">المستخدم</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">المتبقي</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">الحالة</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {emp.custodies.map((c) => (
+                                                <tr key={c.id} className="border-b border-white/5 last:border-0">
+                                                  <td className="px-3 py-2.5 font-medium text-slate-200">{c.purpose}</td>
+                                                  <td className="px-3 py-2.5 text-slate-300">{c.projectName}</td>
+                                                  <td className="px-3 py-2.5 text-slate-400">{formatDate(c.issuedDate)}</td>
+                                                  <td className="px-3 py-2.5 tabular-nums">{formatCurrency(c.allocatedAmount)}</td>
+                                                  <td className="px-3 py-2.5 tabular-nums text-money-negative">{formatCurrency(c.usedAmount)}</td>
+                                                  <td className="px-3 py-2.5 tabular-nums text-money-positive">{formatCurrency(c.remaining)}</td>
+                                                  <td className="px-3 py-2.5">
+                                                    <Badge variant={statusVariant(c.status)}>
+                                                      {STATUS_LABELS[c.status] ?? c.status}
+                                                    </Badge>
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div>
+                                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                        <h4 className="text-sm font-bold text-white">
+                                          المصروفات ({emp.expenses.length})
+                                        </h4>
+                                        {emp.expenses.length > 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => printEmployeePettyReportPdf(emp)}
+                                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10"
+                                          >
+                                            <Printer className="h-3.5 w-3.5" />
+                                            طباعة مصروفات الموظف
+                                          </button>
+                                        )}
+                                      </div>
+                                      {emp.expenses.length === 0 ? (
+                                        <p className="text-sm text-slate-500">لا توجد مصروفات مسجّلة لهذا الموظف</p>
+                                      ) : (
+                                        <div className="overflow-x-auto rounded-xl border border-white/10">
+                                          <table className="w-full min-w-[640px] text-sm">
+                                            <thead>
+                                              <tr className="border-b border-white/10 bg-white/3 text-slate-400">
+                                                <th className="px-3 py-2.5 text-right font-medium">التاريخ</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">العنوان</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">المشروع</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">التصنيف</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">المبلغ</th>
+                                                <th className="px-3 py-2.5 text-right font-medium">الحالة</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {emp.expenses.map((e) => (
+                                                <tr key={e.id} className="border-b border-white/5 last:border-0">
+                                                  <td className="px-3 py-2.5 text-slate-400">{formatDate(e.expenseDate)}</td>
+                                                  <td className="px-3 py-2.5 font-medium text-slate-200">{e.title}</td>
+                                                  <td className="px-3 py-2.5 text-slate-300">{e.projectName}</td>
+                                                  <td className="px-3 py-2.5 text-slate-300">{e.category}</td>
+                                                  <td className="px-3 py-2.5 tabular-nums text-money-negative">{formatCurrency(e.amount)}</td>
+                                                  <td className="px-3 py-2.5">
+                                                    <Badge variant={statusVariant(e.status)}>
+                                                      {STATUS_LABELS[e.status] ?? e.status}
+                                                    </Badge>
+                                                  </td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </PanelCard>
             </>
           )}
