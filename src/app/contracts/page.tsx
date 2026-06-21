@@ -33,15 +33,25 @@ export default function ContractsPage() {
   const [error, setError] = useState<string | null>(null);
   const [profitPreview, setProfitPreview] = useState({ total: 0, profit: 0, margin: 0 });
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!token) return;
     setLoading(true);
+    try {
+      const contracts = await api.contracts(token).list();
+      setRows(contracts);
+    } catch (e) {
+      console.error(e);
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
     Promise.all([
-      api.contracts(token).list(),
       api.contractors(token).list(),
       api.projects(token).picker(),
-    ]).then(([c, co, p]) => { setRows(c); setContractors(co); setProjects(p); })
-      .catch(console.error).finally(() => setLoading(false));
+    ]).then(([co, p]) => {
+      setContractors(co);
+      setProjects(p);
+    }).catch(console.error);
   }, [token]);
 
   useEffect(() => { load(); }, [load]);

@@ -73,20 +73,24 @@ export default function ExtractsPage() {
   const load = useCallback(async () => {
     if (!token) return;
     setLoading(true);
+    setError(null);
     try {
-      const [ext, proj, cont] = await Promise.all([
-        api.extracts(token).list(),
-        api.projects(token).picker(),
-        api.contractors(token).list(),
-      ]);
+      const ext = await api.extracts(token).list();
       setRows(ext);
-      setProjects(proj);
-      setContractors(cont);
     } catch (e) {
       console.error(e);
+      setRows([]);
+      setError("تعذر تحميل المستخلصات");
     } finally {
       setLoading(false);
     }
+    Promise.all([
+      api.projects(token).picker(),
+      api.contractors(token).list(),
+    ]).then(([proj, cont]) => {
+      setProjects(proj);
+      setContractors(cont);
+    }).catch(console.error);
   }, [token]);
 
   useEffect(() => { load(); }, [load]);

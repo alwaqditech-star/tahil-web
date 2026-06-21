@@ -23,6 +23,10 @@ export function canViewContracts(role: string): boolean {
   return role === "admin" || role === "project_manager" || role === "accountant";
 }
 
+export function canViewContractors(role: string): boolean {
+  return role === "admin" || role === "project_manager" || role === "accountant";
+}
+
 export function canViewReports(role: string): boolean {
   return role === "admin" || role === "accountant" || role === "project_manager";
 }
