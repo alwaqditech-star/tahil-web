@@ -62,6 +62,22 @@ export default function UsersPage() {
     return map;
   }, [projects]);
 
+  /** مشاريع مسندة لمديري مشاريع آخرين (يُستثنى المستخدم الحالي عند التعديل) */
+  const takenByOtherManagers = useMemo(() => {
+    const taken = new Set<number>();
+    for (const u of rows) {
+      if (u.role !== "project_manager" || u.id === editId) continue;
+      for (const id of u.assignedProjectIds ?? []) taken.add(id);
+    }
+    return taken;
+  }, [rows, editId]);
+
+  const availableProjectsForManager = useMemo(() => {
+    return projects.filter(
+      (p) => !takenByOtherManagers.has(p.id) || form.assignedProjectIds.includes(p.id),
+    );
+  }, [projects, takenByOtherManagers, form.assignedProjectIds]);
+
   const load = useCallback(() => {
     if (!token) return;
     setLoading(true);
@@ -248,11 +264,11 @@ export default function UsersPage() {
             {needsMultipleProjects(form.role) && (
               <div className="col-span-2">
                 <Field label="المشاريع المسندة">
-                {projects.length === 0 ? (
-                  <p className="text-sm text-slate-500">لا توجد مشاريع</p>
+                {availableProjectsForManager.length === 0 ? (
+                  <p className="text-sm text-slate-500">لا توجد مشاريع متاحة للإسناد — كل المشاريع مسندة لمديري مشاريع آخرين</p>
                 ) : (
                   <div className="max-h-44 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
-                    {projects.map((p) => (
+                    {availableProjectsForManager.map((p) => (
                       <label key={p.id} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white">
                         <input
                           type="checkbox"
@@ -265,7 +281,7 @@ export default function UsersPage() {
                     ))}
                   </div>
                 )}
-                <p className="mt-1 text-xs text-slate-500">يمكن إسناد أكثر من مشروع لمدير المشاريع</p>
+                <p className="mt-1 text-xs text-slate-500">كل مشروع يُسند لمدير مشاريع واحد فقط — المشاريع المسندة لمدير آخر لا تظهر هنا</p>
                 </Field>
               </div>
             )}
