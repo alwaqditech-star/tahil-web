@@ -6,7 +6,6 @@ function escapeHtml(text: string) {
     .replace(/"/g, "&quot;");
 }
 
-const COMPANY = "تأهيل الاعمار";
 const SUBTITLE = "نظام إدارة المقاولات";
 
 function safeFilename(name: string) {
@@ -18,7 +17,6 @@ export const PDF_STYLES = `
   body { margin: 0; padding: 0; background: #f1f5f9; font-family: Tahoma, "Segoe UI", Arial, sans-serif; color: #0f172a; }
   .pdf-doc { max-width: 210mm; margin: 0 auto; background: #fff; min-height: 100vh; }
   .pdf-header { background: linear-gradient(135deg, #1a365d 0%, #2d4a7c 100%); color: #fff; padding: 28px 32px 24px; border-bottom: 4px solid #c9a066; }
-  .pdf-brand { font-size: 13px; color: #e8c99a; letter-spacing: 0.5px; margin-bottom: 6px; }
   .pdf-title { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.4; }
   .pdf-meta { margin: 10px 0 0; font-size: 11px; color: #cbd5e1; }
   .pdf-body { padding: 28px 32px 36px; }
@@ -68,12 +66,11 @@ export function buildDocumentHtml(title: string, bodyHtml: string, withToolbar =
   ${toolbar}
   <div class="pdf-doc">
     <header class="pdf-header">
-      <div class="pdf-brand">${COMPANY}</div>
       <h1 class="pdf-title">${escapeHtml(title)}</h1>
       <p class="pdf-meta">${SUBTITLE} — تاريخ التصدير: ${new Date().toLocaleString("ar-SA")}</p>
     </header>
     <main class="pdf-body">${bodyHtml}</main>
-    <footer class="pdf-footer">${COMPANY} — ${SUBTITLE}</footer>
+    <footer class="pdf-footer">${SUBTITLE}</footer>
   </div>
 </body>
 </html>`;
