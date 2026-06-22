@@ -63,10 +63,18 @@ function ManagerTeamPanel({
   manager,
   allUsers,
   projectNames,
+  role,
+  currentUserId,
+  onEdit,
+  onDelete,
 }: {
   manager: UserRow;
   allUsers: UserRow[];
   projectNames: Map<number, string>;
+  role: string;
+  currentUserId?: number;
+  onEdit: (u: UserRow) => void;
+  onDelete: (id: number) => void;
 }) {
   const projectIds = manager.assignedProjectIds ?? [];
   const fieldTeam = allUsers.filter(
@@ -104,6 +112,7 @@ function ManagerTeamPanel({
                     <th className="text-right p-3">اسم المستخدم</th>
                     <th className="text-right p-3">القسم</th>
                     <th className="text-right p-3">الحالة</th>
+                    <th className="text-right p-3">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -119,6 +128,12 @@ function ManagerTeamPanel({
                         <Badge variant={m.isActive ? statusVariant("active") : statusVariant("inactive")}>
                           {m.isActive ? "نشط" : "معطّل"}
                         </Badge>
+                      </td>
+                      <td className="p-3">
+                        <RowActions
+                          onEdit={canEdit(role, "users") ? () => onEdit(m) : undefined}
+                          onDelete={canDelete(role) && m.id !== currentUserId ? () => onDelete(m.id) : undefined}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -377,7 +392,15 @@ export default function UsersPage() {
                     {expandedManagerId === m.id && (
                       <tr>
                         <td colSpan={9} className="p-0">
-                          <ManagerTeamPanel manager={m} allUsers={rows} projectNames={projectNames} />
+                          <ManagerTeamPanel
+                            manager={m}
+                            allUsers={rows}
+                            projectNames={projectNames}
+                            role={role}
+                            currentUserId={user?.id}
+                            onEdit={openEdit}
+                            onDelete={setDeleteId}
+                          />
                         </td>
                       </tr>
                     )}
