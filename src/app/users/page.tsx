@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, FormActions, RowActions, PageToolbar, ConfirmDialog } from "@/components/crud/ui";
@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { api, type UserRow, type ProjectPickerOption } from "@/lib/api";
 import { canCreate, canEdit, canDelete } from "@/lib/permissions";
 import { ROLE_LABELS } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 type UserForm = {
   name: string;
@@ -44,11 +44,138 @@ function needsSingleProject(role: string) {
   return FIELD_PROJECT_ROLES.has(role);
 }
 
+function formatUserProjects(
+  u: UserRow,
+  projectNames: Map<number, string>,
+) {
+  if (u.role === "project_manager") {
+    const ids = u.assignedProjectIds ?? [];
+    if (ids.length === 0) return "—";
+    return ids.map((id) => projectNames.get(id) ?? `#${id}`).join("، ");
+  }
+  if (needsSingleProject(u.role)) {
+    return u.assignedProjectId ? (projectNames.get(u.assignedProjectId) ?? `#${u.assignedProjectId}`) : "—";
+  }
+  return "—";
+}
+
+function ManagerTeamPanel({
+  manager,
+  allUsers,
+  projectNames,
+}: {
+  manager: UserRow;
+  allUsers: UserRow[];
+  projectNames: Map<number, string>;
+}) {
+  const projectIds = manager.assignedProjectIds ?? [];
+  const fieldTeam = allUsers.filter(
+    (u) => needsSingleProject(u.role) && u.assignedProjectId && projectIds.includes(u.assignedProjectId),
+  );
+
+  const groups = projectIds
+    .map((projectId) => ({
+      projectId,
+      projectName: projectNames.get(projectId) ?? `مشروع #${projectId}`,
+      members: fieldTeam.filter((u) => u.assignedProjectId === projectId),
+    }))
+    .filter((g) => g.members.length > 0);
+
+  return (
+    <div className="p-6 bg-white/3 border-t border-white/5">
+      <h3 className="font-bold text-white text-lg mb-4">فريق المشاريع — {manager.name}</h3>
+      {groups.length === 0 ? (
+        <p className="text-center py-8 text-slate-500 rounded-xl border border-white/10 bg-white/3">
+          لا يوجد مشرفون أو مهندسون مسندون لمشاريع هذا المدير
+        </p>
+      ) : (
+        <div className="space-y-5">
+          {groups.map((g) => (
+            <div key={g.projectId} className="rounded-xl border border-white/10 overflow-hidden bg-slate-900/40">
+              <div className="px-4 py-3 border-b border-white/10 bg-white/5">
+                <p className="text-sm font-semibold text-white">{g.projectName}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{g.members.length} عضو في الفريق الميداني</p>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-slate-400">
+                    <th className="text-right p-3">الاسم</th>
+                    <th className="text-right p-3">الدور</th>
+                    <th className="text-right p-3">اسم المستخدم</th>
+                    <th className="text-right p-3">القسم</th>
+                    <th className="text-right p-3">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {g.members.map((m) => (
+                    <tr key={m.id} className="border-b border-white/5 last:border-0">
+                      <td className="p-3 text-white font-medium">{m.name}</td>
+                      <td className="p-3">
+                        <Badge variant="info">{ROLE_LABELS[m.role] ?? m.role}</Badge>
+                      </td>
+                      <td className="p-3 text-sky-400 font-mono text-xs">{m.username}</td>
+                      <td className="p-3 text-slate-400">{m.department ?? "—"}</td>
+                      <td className="p-3">
+                        <Badge variant={m.isActive ? statusVariant("active") : statusVariant("inactive")}>
+                          {m.isActive ? "نشط" : "معطّل"}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserRowCells({
+  u,
+  projectNames,
+  role,
+  user,
+  onEdit,
+  onDelete,
+}: {
+  u: UserRow;
+  projectNames: Map<number, string>;
+  role: string;
+  user: { id: number } | null;
+  onEdit: (u: UserRow) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <>
+      <td className="p-4 text-white font-medium">{u.name}</td>
+      <td className="p-4 text-slate-400">{u.email}</td>
+      <td className="p-4 text-sky-400 font-mono">{u.username}</td>
+      <td className="p-4"><Badge variant="info">{ROLE_LABELS[u.role] ?? u.role}</Badge></td>
+      <td className="p-4 text-slate-300 max-w-xs">{formatUserProjects(u, projectNames)}</td>
+      <td className="p-4 text-slate-500">{u.department ?? "—"}</td>
+      <td className="p-4">
+        <Badge variant={u.isActive ? statusVariant("active") : statusVariant("inactive")}>
+          {u.isActive ? "نشط" : "معطّل"}
+        </Badge>
+      </td>
+      <td className="p-4">
+        <RowActions
+          onEdit={canEdit(role, "users") ? () => onEdit(u) : undefined}
+          onDelete={canDelete(role) && u.id !== user?.id ? () => onDelete(u.id) : undefined}
+        />
+      </td>
+    </>
+  );
+}
+
 export default function UsersPage() {
   const { token, user } = useAuth();
   const [rows, setRows] = useState<UserRow[]>([]);
   const [projects, setProjects] = useState<ProjectPickerOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedManagerId, setExpandedManagerId] = useState<number | null>(null);
   const [modal, setModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState<UserForm>(empty());
@@ -62,7 +189,27 @@ export default function UsersPage() {
     return map;
   }, [projects]);
 
-  /** مشاريع مسندة لمديري مشاريع آخرين (يُستثنى المستخدم الحالي عند التعديل) */
+  const { managers, deskUsers, unlinkedFieldUsers } = useMemo(() => {
+    const managers = rows.filter((u) => u.role === "project_manager");
+    const fieldUsers = rows.filter((u) => needsSingleProject(u.role));
+    const linkedFieldIds = new Set<number>();
+
+    for (const m of managers) {
+      const pids = new Set(m.assignedProjectIds ?? []);
+      for (const f of fieldUsers) {
+        if (f.assignedProjectId && pids.has(f.assignedProjectId)) {
+          linkedFieldIds.add(f.id);
+        }
+      }
+    }
+
+    return {
+      managers,
+      deskUsers: rows.filter((u) => !needsSingleProject(u.role) && u.role !== "project_manager"),
+      unlinkedFieldUsers: fieldUsers.filter((f) => !linkedFieldIds.has(f.id)),
+    };
+  }, [rows]);
+
   const takenByOtherManagers = useMemo(() => {
     const taken = new Set<number>();
     for (const u of rows) {
@@ -91,18 +238,6 @@ export default function UsersPage() {
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
-
-  const formatUserProjects = (u: UserRow) => {
-    if (u.role === "project_manager") {
-      const ids = u.assignedProjectIds ?? [];
-      if (ids.length === 0) return "—";
-      return ids.map((id) => projectNames.get(id) ?? `#${id}`).join("، ");
-    }
-    if (needsSingleProject(u.role)) {
-      return u.assignedProjectId ? (projectNames.get(u.assignedProjectId) ?? `#${u.assignedProjectId}`) : "—";
-    }
-    return "—";
-  };
 
   const openAdd = () => {
     setEditId(null);
@@ -192,6 +327,20 @@ export default function UsersPage() {
 
   const role = user?.role ?? "";
 
+  const tableHeader = (
+    <tr className="border-b border-white/10 text-slate-400 bg-white/3">
+      <th className="w-10 p-3" />
+      <th className="text-right p-4 font-semibold">الاسم</th>
+      <th className="text-right p-4 font-semibold">البريد</th>
+      <th className="text-right p-4 font-semibold">اسم المستخدم</th>
+      <th className="text-right p-4 font-semibold">الدور</th>
+      <th className="text-right p-4 font-semibold">المشاريع المسندة</th>
+      <th className="text-right p-4 font-semibold">القسم</th>
+      <th className="text-right p-4 font-semibold">الحالة</th>
+      <th className="text-right p-4 font-semibold">إجراءات</th>
+    </tr>
+  );
+
   return (
     <AppShell title="إدارة المستخدمين">
       <PageToolbar onAdd={canCreate(role, "users") ? openAdd : undefined} addLabel="مستخدم جديد" />
@@ -201,31 +350,44 @@ export default function UsersPage() {
         <div className="glass-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-slate-400">
-                  <th className="text-right p-4">الاسم</th>
-                  <th className="text-right p-4">البريد</th>
-                  <th className="text-right p-4">اسم المستخدم</th>
-                  <th className="text-right p-4">الدور</th>
-                  <th className="text-right p-4">المشاريع المسندة</th>
-                  <th className="text-right p-4">القسم</th>
-                  <th className="text-right p-4">الحالة</th>
-                  <th className="text-right p-4">إجراءات</th>
-                </tr>
-              </thead>
+              <thead>{tableHeader}</thead>
               <tbody>
-                {rows.map((u) => (
+                {deskUsers.map((u) => (
                   <tr key={u.id} className="border-b border-white/5 hover:bg-white/3">
-                    <td className="p-4 text-white font-medium">{u.name}</td>
-                    <td className="p-4 text-slate-400">{u.email}</td>
-                    <td className="p-4 text-sky-400 font-mono">{u.username}</td>
-                    <td className="p-4"><Badge variant="info">{ROLE_LABELS[u.role] ?? u.role}</Badge></td>
-                    <td className="p-4 text-slate-300 max-w-xs">{formatUserProjects(u)}</td>
-                    <td className="p-4 text-slate-500">{u.department ?? "—"}</td>
-                    <td className="p-4"><Badge variant={u.isActive ? statusVariant("active") : statusVariant("inactive")}>{u.isActive ? "نشط" : "معطّل"}</Badge></td>
-                    <td className="p-4">
-                      <RowActions onEdit={canEdit(role, "users") ? () => openEdit(u) : undefined} onDelete={canDelete(role) && u.id !== user?.id ? () => setDeleteId(u.id) : undefined} />
-                    </td>
+                    <td className="p-3" />
+                    <UserRowCells u={u} projectNames={projectNames} role={role} user={user} onEdit={openEdit} onDelete={setDeleteId} />
+                  </tr>
+                ))}
+
+                {managers.map((m) => (
+                  <Fragment key={m.id}>
+                    <tr className={`border-b border-white/5 hover:bg-white/3 transition-colors ${expandedManagerId === m.id ? "bg-white/5" : ""}`}>
+                      <td className="p-3">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedManagerId(expandedManagerId === m.id ? null : m.id)}
+                          className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white"
+                          title="عرض الفريق الميداني"
+                        >
+                          {expandedManagerId === m.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </button>
+                      </td>
+                      <UserRowCells u={m} projectNames={projectNames} role={role} user={user} onEdit={openEdit} onDelete={setDeleteId} />
+                    </tr>
+                    {expandedManagerId === m.id && (
+                      <tr>
+                        <td colSpan={9} className="p-0">
+                          <ManagerTeamPanel manager={m} allUsers={rows} projectNames={projectNames} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+
+                {unlinkedFieldUsers.map((u) => (
+                  <tr key={u.id} className="border-b border-white/5 hover:bg-white/3">
+                    <td className="p-3" />
+                    <UserRowCells u={u} projectNames={projectNames} role={role} user={user} onEdit={openEdit} onDelete={setDeleteId} />
                   </tr>
                 ))}
               </tbody>
@@ -298,7 +460,7 @@ export default function UsersPage() {
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </Select>
-                <p className="mt-1 text-xs text-slate-500">مشرف الموقع ومهندس المشروع يرتبطان بمشروع واحد</p>
+                <p className="mt-1 text-xs text-slate-500">مشرف الموقع ومهندس المشروع يرتبطان بمشروع واحد ويظهران تحت مدير ذلك المشروع</p>
                 </Field>
               </div>
             )}

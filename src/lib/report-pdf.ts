@@ -57,7 +57,10 @@ export async function printProjectReportPdf(report: ProjectReport) {
       { label: "مصروفات معلقة", value: formatCurrency(s.pendingExpenses) },
       { label: "مصروفات مدفوعة", value: formatCurrency(s.paidExpenses) },
       { label: "إجمالي المستخلصات", value: formatCurrency(s.totalExtracts) },
-      { label: "مستخلصات مدفوعة", value: formatCurrency(s.paidExtracts) },
+      { label: "مستخلصات معتمدة/مدفوعة", value: formatCurrency(s.costExtracts ?? s.paidExtracts) },
+      { label: "إجمالي المشتريات", value: formatCurrency(s.totalPurchases) },
+      { label: "إجمالي التكاليف", value: formatCurrency(s.totalCosts ?? 0) },
+      { label: "صافي الربح", value: formatCurrency(s.profit ?? 0) },
       { label: "هامش الربح", value: `${s.profitMargin}%` },
     ])}
     <div class="pdf-section">

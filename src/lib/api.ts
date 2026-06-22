@@ -216,8 +216,9 @@ export type ProjectReport = {
   };
   summary: {
     totalExpenses: number; totalExpensesAll: number; pendingExpenses: number; paidExpenses: number;
-    totalExtracts: number; paidExtracts: number; profitMargin: number;
-    itemsCount: number; budgetConsumptionPercent: number; totalPurchases: number; pettyCashUsed: number;
+    totalExtracts: number; paidExtracts: number; costExtracts: number;
+    totalPurchases: number; totalCosts: number; profit: number; profitMargin: number;
+    itemsCount: number; budgetConsumptionPercent: number; pettyCashUsed: number;
   };
   expensesByCategory: Array<{ category: string; amount: number; percent: number; color: string }>;
   contractItems: Array<{
