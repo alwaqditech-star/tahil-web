@@ -42,8 +42,8 @@ export function canExportReportPdf(role: string): boolean {
 export function canCreate(role: string, resource: string): boolean {
   const map: Record<string, string[]> = {
     projects: ["admin"],
-    projectItems: ["admin"],
-    catalogItems: ["admin", "project_manager"],
+    projectItems: ["admin", "accountant"],
+    catalogItems: ["admin", "project_manager", "accountant"],
     expenses: ["admin", "project_manager", "site_supervisor", "project_engineer"],
     pettyCash: ["admin", "accountant"],
     pettyCashUse: ["project_manager", "site_supervisor", "project_engineer"],
@@ -60,8 +60,8 @@ export function canCreate(role: string, resource: string): boolean {
 export function canEdit(role: string, resource: string): boolean {
   const map: Record<string, string[]> = {
     projects: ["admin"],
-    projectItems: ["admin"],
-    catalogItems: ["admin", "project_manager"],
+    projectItems: ["admin", "accountant"],
+    catalogItems: ["admin", "project_manager", "accountant"],
     expenses: ["admin", "project_manager"],
     pettyCash: ["admin", "accountant"],
     extracts: ["admin", "project_manager", "project_engineer"],
@@ -82,7 +82,7 @@ export function canManagerApproveExpense(role: string): boolean {
 }
 
 export function canAccountantApproveExpense(role: string): boolean {
-  return role === "admin" || role === "accountant";
+  return role === "accountant";
 }
 
 export function canSettlePettyCash(role: string): boolean {
@@ -98,7 +98,7 @@ export function canApproveExtractManager(role: string): boolean {
 }
 
 export function canApproveExtractAccountant(role: string): boolean {
-  return role === "admin" || role === "accountant";
+  return role === "accountant";
 }
 
 export function canExportPdf(role: string): boolean {
@@ -107,6 +107,10 @@ export function canExportPdf(role: string): boolean {
 
 export function canCreateTask(role: string): boolean {
   return role === "admin" || role === "project_manager" || role === "accountant";
+}
+
+export function canRunSmartTasks(role: string): boolean {
+  return role === "admin" || role === "accountant";
 }
 
 export function canViewTasks(role: string): boolean {

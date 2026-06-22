@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, FormActions, RowActions, ConfirmDialog, Btn, NumberInput } from "@/components/crud/ui";
@@ -28,9 +28,11 @@ export default function ExpensesPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewIsPdf, setPreviewIsPdf] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const previewBusyRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -62,7 +64,7 @@ export default function ExpensesPage() {
     setEditId(null);
     setForm({
       projectId: defaultProject,
-      title: "", amount: 0, category: categories[0]?.name ?? "",
+      title: "", amount: 0, category: "",
       expenseDate: new Date().toISOString().slice(0, 10),
       attachmentUrl: "", description: "", isGeneral: false, contractorId: 0, projectItemId: 0,
     });
@@ -83,11 +85,16 @@ export default function ExpensesPage() {
     ev.preventDefault();
     if (!token) return;
     setSaving(true); setError(null);
+    if (form.isGeneral && !form.category) {
+      setError("اختر الفئة للمصروف العام");
+      setSaving(false);
+      return;
+    }
     const body = {
       projectId: form.projectId,
       title: form.title,
       amount: form.amount,
-      category: form.category,
+      category: form.isGeneral ? form.category : "مرتبط ببند",
       expenseDate: form.expenseDate,
       attachmentUrl: form.attachmentUrl,
       description: form.description,
@@ -135,11 +142,18 @@ export default function ExpensesPage() {
     if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setPreviewIsPdf(false);
+    setPreviewOpen(false);
+    setPreviewLoading(false);
+    previewBusyRef.current = false;
   };
 
   const openPreview = async (attachmentUrl: string) => {
-    if (!token) return;
+    if (!token || previewBusyRef.current) return;
+    previewBusyRef.current = true;
     setPreviewLoading(true);
+    setPreviewOpen(true);
+    setPreviewUrl(null);
+    setPreviewIsPdf(false);
     try {
       const { url, mimeType } = await fetchAttachmentBlobUrl(attachmentUrl, token);
       setPreviewIsPdf(
@@ -148,9 +162,12 @@ export default function ExpensesPage() {
       );
       setPreviewUrl(url);
     } catch (err) {
+      closePreview();
       alert(err instanceof Error ? err.message : "تعذر عرض المرفق");
+      return;
     } finally {
       setPreviewLoading(false);
+      previewBusyRef.current = false;
     }
   };
 
@@ -203,15 +220,21 @@ export default function ExpensesPage() {
                     <td className="p-4 text-white font-medium">{e.title}</td>
                     <td className="p-4 text-slate-400">{e.projectName}</td>
                     <td className="p-4 text-xs">{e.type === "general" ? "عام" : "مرتبط ببند"}</td>
-                    <td className="p-4 text-slate-300">{e.category}</td>
+                    <td className="p-4 text-slate-300">{e.type === "general" ? e.category : "—"}</td>
                     {showFinancial && <td className="p-4 text-money-negative">{formatCurrency(e.amount)}</td>}
                     <td className="p-4"><Badge variant={statusVariant(e.status)}>{STATUS_LABELS[e.status] ?? e.status}</Badge></td>
                     <td className="p-4 text-slate-500">{formatDate(e.expenseDate)}</td>
                     <td className="p-4">
                       {e.attachmentUrl ? (
                         <div className="flex gap-2">
-                          <button type="button" onClick={() => openPreview(e.attachmentUrl!)} disabled={previewLoading} className="erp-link text-xs inline-flex items-center gap-1">
-                            <Eye className="h-3 w-3" /> معاينة
+                          <button
+                            type="button"
+                            onClick={() => openPreview(e.attachmentUrl!)}
+                            disabled={previewLoading || previewOpen}
+                            className="erp-link text-xs inline-flex items-center gap-1 disabled:opacity-40 disabled:pointer-events-none"
+                          >
+                            {previewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+                            معاينة
                           </button>
                         </div>
                       ) : "—"}
@@ -261,7 +284,16 @@ export default function ExpensesPage() {
             <input
               type="checkbox"
               checked={form.isGeneral}
-              onChange={(e) => setForm({ ...form, isGeneral: e.target.checked, contractorId: 0, projectItemId: 0 })}
+              onChange={(e) => {
+                const isGeneral = e.target.checked;
+                setForm({
+                  ...form,
+                  isGeneral,
+                  contractorId: 0,
+                  projectItemId: 0,
+                  category: isGeneral ? (form.category || categories[0]?.name || "") : "",
+                });
+              }}
               className="rounded"
             />
             مصروف عام للمشروع (كهرباء، ماء، إيجار، ضيافة...)
@@ -294,12 +326,15 @@ export default function ExpensesPage() {
           )}
 
           <Field label="العنوان" required><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></Field>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="الفئة" required>
-              <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required>
-                {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-              </Select>
-            </Field>
+          <div className={form.isGeneral ? "grid grid-cols-2 gap-4" : ""}>
+            {form.isGeneral && (
+              <Field label="الفئة" required>
+                <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required>
+                  <option value="">— اختر الفئة —</option>
+                  {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                </Select>
+              </Field>
+            )}
             <Field label="المبلغ" required><NumberInput value={form.amount} onChange={(amount) => setForm({ ...form, amount })} required /></Field>
           </div>
           <Field label="التاريخ" required><Input type="date" value={form.expenseDate} onChange={(e) => setForm({ ...form, expenseDate: e.target.value })} required /></Field>
@@ -310,7 +345,14 @@ export default function ExpensesPage() {
             {form.attachmentUrl && (
               <div className="mt-2 flex gap-2">
                 <p className="text-xs text-emerald-400">تم رفع المرفق ✓</p>
-                <button type="button" className="erp-link text-xs" onClick={() => openPreview(form.attachmentUrl)} disabled={previewLoading}>معاينة</button>
+                <button
+                  type="button"
+                  className="erp-link text-xs disabled:opacity-40 disabled:pointer-events-none"
+                  onClick={() => openPreview(form.attachmentUrl)}
+                  disabled={previewLoading || previewOpen}
+                >
+                  {previewLoading ? "جاري الجلب..." : "معاينة"}
+                </button>
               </div>
             )}
           </Field>
@@ -320,15 +362,21 @@ export default function ExpensesPage() {
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={onDelete} message="هل أنت متأكد من حذف هذا المصروف؟" loading={saving} />
 
-      <Modal open={!!previewUrl} onClose={closePreview} title="معاينة المرفق" wide>
-        {previewUrl && (
+      <Modal open={previewOpen} onClose={closePreview} title="معاينة المرفق" wide>
+        {previewLoading ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-20">
+            <Loader2 className="h-10 w-10 animate-spin spinner-brand" />
+            <p className="text-sm text-slate-400">جاري جلب المرفق...</p>
+            <p className="text-xs text-slate-500">يرجى الانتظار ولا تغلق النافذة</p>
+          </div>
+        ) : previewUrl ? (
           previewIsPdf ? (
             <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg border border-white/10" title="مرفق PDF" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previewUrl} alt="مرفق" className="max-h-[70vh] mx-auto rounded-lg" />
           )
-        )}
+        ) : null}
       </Modal>
     </AppShell>
   );

@@ -6,7 +6,7 @@ import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, Textarea, FormActions, PageToolbar, Btn } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type Task, type UserRow, API_BASE_URL } from "@/lib/api";
-import { canCreateTask } from "@/lib/permissions";
+import { canCreateTask, canRunSmartTasks } from "@/lib/permissions";
 import { Loader2, AlertTriangle, Clock } from "lucide-react";
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -101,7 +101,7 @@ export default function TasksPage() {
           <button onClick={() => setMine(!mine)} className={`px-3 py-1.5 rounded-lg text-sm ${mine ? "bg-blue-500/15 text-white border border-blue-500/30" : "bg-white/5 text-slate-400"}`}>مهامي</button>
         </div>
         <div className="flex gap-2">
-          {user?.role === "admin" && <Btn variant="secondary" onClick={runAutomation}>مهام ذكية</Btn>}
+          {canRunSmartTasks(role) && <Btn variant="secondary" onClick={runAutomation}>مهام ذكية</Btn>}
           {canCreateTask(role) && <Btn onClick={openAdd}>+ مهمة جديدة</Btn>}
         </div>
       </div>
