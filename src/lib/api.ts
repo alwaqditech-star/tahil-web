@@ -489,6 +489,11 @@ export async function fetchAttachmentBlobUrl(path: string, token: string): Promi
     throw new Error(err.error ?? "تعذر تحميل المرفق");
   }
   const mimeType = res.headers.get("content-type") ?? "";
-  const blob = await res.blob();
-  return { url: URL.createObjectURL(blob), mimeType: blob.type || mimeType };
+  const rawBlob = await res.blob();
+  const isPdf = mimeType.includes("pdf") || path.toLowerCase().endsWith(".pdf");
+  const effectiveMime = rawBlob.type || mimeType || (isPdf ? "application/pdf" : "application/octet-stream");
+  const blob = rawBlob.type === effectiveMime
+    ? rawBlob
+    : new Blob([await rawBlob.arrayBuffer()], { type: effectiveMime });
+  return { url: URL.createObjectURL(blob), mimeType: effectiveMime };
 }

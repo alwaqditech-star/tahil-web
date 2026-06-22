@@ -371,7 +371,22 @@ export default function ExpensesPage() {
           </div>
         ) : previewUrl ? (
           previewIsPdf ? (
-            <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg border border-white/10" title="مرفق PDF" />
+            <div className="space-y-3">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="erp-link text-xs"
+                  onClick={() => window.open(previewUrl, "_blank", "noopener,noreferrer")}
+                >
+                  فتح PDF في تبويب جديد
+                </button>
+              </div>
+              <iframe
+                src={previewUrl}
+                className="w-full h-[70vh] rounded-lg border border-white/10 bg-white"
+                title="مرفق PDF"
+              />
+            </div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previewUrl} alt="مرفق" className="max-h-[70vh] mx-auto rounded-lg" />

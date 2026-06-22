@@ -19,6 +19,8 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               `connect-src 'self' ${API_URL} http://localhost:3001`,
+              `frame-src 'self' blob: ${API_URL}`,
+              "object-src 'self' blob:",
               "font-src 'self' data:",
             ].join("; "),
           },
