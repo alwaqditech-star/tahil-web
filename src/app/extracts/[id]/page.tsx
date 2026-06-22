@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { api, type Extract, type ExtractLine, type SmartExtractItem } from "@/lib/api";
 import { canApproveExtractManager, canApproveExtractAccountant, canExportPdf, canCreate } from "@/lib/permissions";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
+import { dataTableHtml, exportPdfDocument, keyValueTableHtml } from "@/lib/pdf-export";
 import { Loader2, ArrowRight, Printer, Save, Send } from "lucide-react";
 
 type LineDraft = ExtractLine & { remainingQuantity?: number; previousQuantity?: number; contractedQuantity?: number };
@@ -23,6 +24,7 @@ export default function ExtractDetailPage() {
   const [smartItems, setSmartItems] = useState<SmartExtractItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -101,18 +103,44 @@ export default function ExtractDetailPage() {
     } catch (err) { alert(err instanceof Error ? err.message : "خطأ"); }
   };
 
-  const printPdf = () => {
-    const w = window.open("", "_blank");
-    if (!w || !extract) return;
+  const exportPdf = async () => {
+    if (!extract) return;
     const activeLines = lines.filter((l) => l.quantity > 0);
-    w.document.write(`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>مستخلص ${extract.extractNumber}</title>
-    <style>body{font-family:Arial,sans-serif;padding:40px}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #333;padding:8px;text-align:right}th{background:#f0f0f0}.header{text-align:center;margin-bottom:30px}.total{font-size:18px;font-weight:bold;margin-top:20px}</style></head><body>
-    <div class="header"><h1>مستخلص مقاول</h1><h2>${extract.title}</h2><p>رقم: ${extract.extractNumber} | التاريخ: ${extract.extractDate}</p><p>بدون ضريبة</p></div>
-    <table><thead><tr><th>البند</th><th>الوحدة</th><th>الكمية</th><th>السعر</th><th>المبلغ</th></tr></thead><tbody>
-    ${activeLines.map((l) => `<tr><td>${l.description}</td><td>${l.unit}</td><td>${l.quantity}</td><td>${l.unitPrice}</td><td>${l.quantity * l.unitPrice}</td></tr>`).join("")}
-    </tbody></table><p class="total">الإجمالي: ${total.toLocaleString("ar-SA")} ر.س</p></body></html>`);
-    w.document.close();
-    w.print();
+    setPdfBusy(true);
+    try {
+      const body = `
+        ${keyValueTableHtml([
+          { label: "رقم المستخلص", value: extract.extractNumber },
+          { label: "العنوان", value: extract.title },
+          { label: "المشروع", value: extract.projectName ?? "—" },
+          { label: "المقاول", value: extract.contractorName ?? "—" },
+          { label: "التاريخ", value: formatDate(extract.extractDate) },
+          { label: "الحالة", value: STATUS_LABELS[extract.status] ?? extract.status },
+          { label: "الإجمالي", value: formatCurrency(total || extract.amount) },
+        ])}
+        ${dataTableHtml(
+          ["البند", "الوحدة", "الكمية", "السعر", "المبلغ"],
+          activeLines.map((l) => [
+            l.description,
+            l.unit,
+            String(l.quantity),
+            formatCurrency(l.unitPrice),
+            formatCurrency(l.quantity * l.unitPrice),
+          ]),
+          ["الإجمالي", "", "", "", formatCurrency(total || extract.amount)],
+        )}
+        <p class="pdf-note">المستخلص بدون ضريبة</p>
+      `;
+      await exportPdfDocument({
+        title: `مستخلص مقاول — ${extract.extractNumber}`,
+        filename: `مستخلص-${extract.extractNumber}`,
+        bodyHtml: body,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "تعذر تصدير PDF");
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   const role = user?.role ?? "";
@@ -151,7 +179,11 @@ export default function ExtractDetailPage() {
                     )}
                   </>
                 )}
-                {canExportPdf(role) && <Btn variant="secondary" onClick={printPdf}><Printer className="h-4 w-4" /> PDF</Btn>}
+                {canExportPdf(role) && (
+                  <Btn variant="secondary" onClick={exportPdf} loading={pdfBusy}>
+                    <Printer className="h-4 w-4" /> تصدير PDF
+                  </Btn>
+                )}
                 {extract.status === "submitted" && canApproveExtractManager(role) && <Btn variant="success" onClick={() => doAction("manager_approve")}>اعتماد المدير</Btn>}
                 {extract.status === "manager_approved" && canApproveExtractAccountant(role) && <Btn variant="success" onClick={() => doAction("accountant_approve")}>اعتماد المحاسب</Btn>}
                 {extract.status === "approved" && canApproveExtractAccountant(role) && <Btn variant="success" onClick={() => doAction("mark_paid")}>تسجيل الدفع</Btn>}

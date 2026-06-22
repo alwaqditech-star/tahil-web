@@ -32,6 +32,7 @@ export default function ExpensesPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewIsPdf, setPreviewIsPdf] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState<number | "all" | null>(null);
   const previewBusyRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -183,6 +184,28 @@ export default function ExpensesPage() {
   const isFieldUser = isFieldRole(role);
   const showFinancial = canViewFinancialData(role);
 
+  const exportOnePdf = async (expense: Expense) => {
+    setPdfBusy(expense.id);
+    try {
+      await printExpensePdf(expense, token);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "تعذر تصدير PDF");
+    } finally {
+      setPdfBusy(null);
+    }
+  };
+
+  const exportAllPdf = async () => {
+    setPdfBusy("all");
+    try {
+      await printAllExpensesPdf(rows, token);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "تعذر تصدير PDF");
+    } finally {
+      setPdfBusy(null);
+    }
+  };
+
   return (
     <AppShell title="إدارة المصروفات">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -190,8 +213,8 @@ export default function ExpensesPage() {
           <Btn onClick={openAdd}>+ مصروف جديد</Btn>
         )}
         {canPrintExpensePdf(role) && rows.length > 0 && (
-          <Btn variant="secondary" onClick={() => printAllExpensesPdf(rows, token)}>
-            <Printer className="h-4 w-4" /> طباعة PDF (الكل)
+          <Btn variant="secondary" onClick={exportAllPdf} loading={pdfBusy === "all"} disabled={pdfBusy !== null}>
+            <Printer className="h-4 w-4" /> تصدير PDF (الكل)
           </Btn>
         )}
       </div>
@@ -242,7 +265,13 @@ export default function ExpensesPage() {
                     <td className="p-4">
                       <div className="flex flex-wrap items-center gap-1">
                       {canPrintExpensePdf(role) && (
-                        <Btn variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => printExpensePdf(e, token)}>
+                        <Btn
+                          variant="ghost"
+                          className="!px-2 !py-1 text-xs"
+                          onClick={() => exportOnePdf(e)}
+                          loading={pdfBusy === e.id}
+                          disabled={pdfBusy !== null}
+                        >
                           <Printer className="h-3 w-3" /> PDF
                         </Btn>
                       )}

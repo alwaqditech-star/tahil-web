@@ -31,13 +31,26 @@ function matchesSearch(text: string, query: string) {
   return text.toLowerCase().includes(query.trim().toLowerCase());
 }
 
-function ExportActions({ onCsv, onPdf, disabled }: { onCsv: () => void; onPdf: () => void; disabled?: boolean }) {
+function ExportActions({ onCsv, onPdf, disabled }: { onCsv: () => void; onPdf: () => void | Promise<void>; disabled?: boolean }) {
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  const handlePdf = async () => {
+    setPdfBusy(true);
+    try {
+      await onPdf();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "تعذر تصدير PDF");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-wrap gap-2">
       <button
         type="button"
         onClick={onCsv}
-        disabled={disabled}
+        disabled={disabled || pdfBusy}
         className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
       >
         <Download className="h-3.5 w-3.5" />
@@ -45,14 +58,44 @@ function ExportActions({ onCsv, onPdf, disabled }: { onCsv: () => void; onPdf: (
       </button>
       <button
         type="button"
-        onClick={onPdf}
-        disabled={disabled}
+        onClick={handlePdf}
+        disabled={disabled || pdfBusy}
         className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
       >
-        <Printer className="h-3.5 w-3.5" />
-        PDF
+        {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+        تصدير PDF
       </button>
     </div>
+  );
+}
+
+function PdfExportButton({
+  onClick,
+  label = "تصدير PDF",
+  className = "inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40",
+}: {
+  onClick: () => void | Promise<void>;
+  label?: string;
+  className?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const handleClick = async () => {
+    setBusy(true);
+    try {
+      await onClick();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "تعذر تصدير PDF");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button type="button" onClick={handleClick} disabled={busy} className={className}>
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+      {label}
+    </button>
   );
 }
 
@@ -841,14 +884,9 @@ export default function ReportsPage() {
       {!loading && data && tab !== "projects" && tab !== "contractors" && tab !== "suppliers" && tab !== "expenses" && tab !== "extracts" && tab !== "petty" && (
           <>
           <div className="mb-6 flex justify-end">
-            <button
-              type="button"
+            <PdfExportButton
               onClick={() => data && printFinancialOverviewPdf(data, filterLabel)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              طباعة PDF
-            </button>
+            />
           </div>
           {/* KPI Cards */}
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1005,14 +1043,7 @@ export default function ReportsPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => printProjectReportPdf(projectReport)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                      PDF
-                    </button>
+                    <PdfExportButton onClick={() => printProjectReportPdf(projectReport)} />
                     <Badge variant={statusVariant(projectReport.project.status)}>
                       {STATUS_LABELS[projectReport.project.status] ?? projectReport.project.status}
                     </Badge>
@@ -1136,14 +1167,7 @@ export default function ReportsPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => printContractorReportPdf(contractorReport)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                      PDF
-                    </button>
+                    <PdfExportButton onClick={() => printContractorReportPdf(contractorReport)} />
                     <Badge variant={statusVariant(contractorReport.contractor.status)}>
                       {STATUS_LABELS[contractorReport.contractor.status] ?? contractorReport.contractor.status}
                     </Badge>
@@ -1263,14 +1287,7 @@ export default function ReportsPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => printSupplierReportPdf(supplierReport)}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                      PDF
-                    </button>
+                    <PdfExportButton onClick={() => printSupplierReportPdf(supplierReport)} />
                     <Badge variant={statusVariant(supplierReport.supplier.status)}>
                       {STATUS_LABELS[supplierReport.supplier.status] ?? supplierReport.supplier.status}
                     </Badge>
@@ -1523,7 +1540,7 @@ export default function ReportsPage() {
                           <th className="px-3 py-3 text-right font-medium">المستخدم</th>
                           <th className="px-3 py-3 text-right font-medium">المتبقي</th>
                           <th className="px-3 py-3 text-right font-medium">المصروفات</th>
-                          <th className="px-3 py-3 text-right font-medium">طباعة</th>
+                          <th className="px-3 py-3 text-right font-medium">تصدير</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1557,14 +1574,10 @@ export default function ReportsPage() {
                                   : "—"}
                               </td>
                               <td className="px-3 py-3">
-                                <button
-                                  type="button"
+                                <PdfExportButton
                                   onClick={() => printEmployeePettyReportPdf(emp)}
-                                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10"
-                                >
-                                  <Printer className="h-3.5 w-3.5" />
-                                  PDF
-                                </button>
+                                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
+                                />
                               </td>
                             </tr>
                             {expandedEmployeeId === emp.userId && (
@@ -1619,14 +1632,11 @@ export default function ReportsPage() {
                                           المصروفات ({emp.expenses.length})
                                         </h4>
                                         {emp.expenses.length > 0 && (
-                                          <button
-                                            type="button"
+                                          <PdfExportButton
                                             onClick={() => printEmployeePettyReportPdf(emp)}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10"
-                                          >
-                                            <Printer className="h-3.5 w-3.5" />
-                                            طباعة مصروفات الموظف
-                                          </button>
+                                            label="تصدير مصروفات الموظف"
+                                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10 disabled:opacity-40"
+                                          />
                                         )}
                                       </div>
                                       {emp.expenses.length === 0 ? (
