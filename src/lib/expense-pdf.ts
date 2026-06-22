@@ -2,12 +2,12 @@ import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import { uploadsUrl, type Expense } from "@/lib/api";
 import { printHtmlDocument } from "@/lib/print-pdf";
 
-function attachmentBlock(url?: string | null) {
+function attachmentBlock(url?: string | null, accessToken?: string | null) {
   if (!url) return "";
-  const full = uploadsUrl(url);
+  const full = uploadsUrl(url, accessToken);
   const isPdf = url.toLowerCase().endsWith(".pdf");
-  if (isPdf) {
-    return `<div class="attachment"><p><strong>المرفق:</strong> <a href="${full}" target="_blank">${full}</a></p></div>`;
+  if (isPdf || url.includes("/api/files/")) {
+    return `<div class="attachment"><p><strong>المرفق:</strong> <a href="${full}" target="_blank">فتح المرفق</a></p></div>`;
   }
   return `<div class="attachment"><p><strong>المرفق:</strong></p><img src="${full}" alt="مرفق" /></div>`;
 }
@@ -23,7 +23,7 @@ function expenseRowHtml(e: Expense) {
   </tr>`;
 }
 
-export function printExpensePdf(expense: Expense) {
+export function printExpensePdf(expense: Expense, accessToken?: string | null) {
   const body = `
     <table>
       <tr><th>العنوان</th><td>${expense.title}</td></tr>
@@ -35,16 +35,16 @@ export function printExpensePdf(expense: Expense) {
       <tr><th>مقدّم من</th><td>${expense.submittedBy ?? "—"}</td></tr>
       ${expense.description ? `<tr><th>الوصف</th><td>${expense.description}</td></tr>` : ""}
     </table>
-    ${attachmentBlock(expense.attachmentUrl)}
+    ${attachmentBlock(expense.attachmentUrl, accessToken)}
   `;
   printHtmlDocument(`مصروف — ${expense.title}`, body);
 }
 
-export function printAllExpensesPdf(expenses: Expense[]) {
+export function printAllExpensesPdf(expenses: Expense[], accessToken?: string | null) {
   const rows = expenses.map(expenseRowHtml).join("");
   const attachments = expenses
     .filter((e) => e.attachmentUrl)
-    .map((e) => `<h3 style="margin-top:24px;font-size:14px">${e.title}</h3>${attachmentBlock(e.attachmentUrl)}`)
+    .map((e) => `<h3 style="margin-top:24px;font-size:14px">${e.title}</h3>${attachmentBlock(e.attachmentUrl, accessToken)}`)
     .join("");
   const body = `
     <table>

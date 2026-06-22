@@ -470,4 +470,25 @@ export const api = {
   }),
 };
 
-export const uploadsUrl = (path: string) => `${API_URL}${path}`;
+export const uploadsUrl = (path: string, accessToken?: string | null) => {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("blob:")) return path;
+  const base = `${API_URL}${path}`;
+  if (!accessToken) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}access_token=${encodeURIComponent(accessToken)}`;
+};
+
+export async function fetchAttachmentBlobUrl(path: string, token: string): Promise<{ url: string; mimeType: string }> {
+  const res = await fetch(uploadsUrl(path, token), {
+    headers: { Authorization: `Bearer ${token}` },
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "تعذر تحميل المرفق" }));
+    throw new Error(err.error ?? "تعذر تحميل المرفق");
+  }
+  const mimeType = res.headers.get("content-type") ?? "";
+  const blob = await res.blob();
+  return { url: URL.createObjectURL(blob), mimeType: blob.type || mimeType };
+}

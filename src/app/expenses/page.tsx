@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, FormActions, RowActions, ConfirmDialog, Btn, NumberInput } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
-import { api, uploadsUrl, type Expense, type ProjectPickerOption, type ExpenseCategory, type ContractItem } from "@/lib/api";
+import { api, fetchAttachmentBlobUrl, type Expense, type ProjectPickerOption, type ExpenseCategory, type ContractItem } from "@/lib/api";
 import { canCreate, canEdit, canDelete, canManagerApproveExpense, canAccountantApproveExpense, canPrintExpensePdf, isFieldRole } from "@/lib/permissions";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import { printExpensePdf, printAllExpensesPdf } from "@/lib/expense-pdf";
@@ -26,8 +26,11 @@ export default function ExpensesPage() {
   });
   const [editId, setEditId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewIsPdf, setPreviewIsPdf] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -115,10 +118,40 @@ export default function ExpensesPage() {
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !token) return;
+    setUploading(true);
+    setError(null);
     try {
       const r = await api.upload(token, file);
       setForm((f) => ({ ...f, attachmentUrl: r.url }));
-    } catch (err) { alert(err instanceof Error ? err.message : "خطأ"); }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "فشل رفع الملف");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const closePreview = () => {
+    if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPreviewIsPdf(false);
+  };
+
+  const openPreview = async (attachmentUrl: string) => {
+    if (!token) return;
+    setPreviewLoading(true);
+    try {
+      const { url, mimeType } = await fetchAttachmentBlobUrl(attachmentUrl, token);
+      setPreviewIsPdf(
+        mimeType.includes("pdf")
+        || attachmentUrl.toLowerCase().endsWith(".pdf"),
+      );
+      setPreviewUrl(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "تعذر عرض المرفق");
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const onDelete = async () => {
@@ -139,7 +172,7 @@ export default function ExpensesPage() {
           <Btn onClick={openAdd}>+ مصروف جديد</Btn>
         )}
         {canPrintExpensePdf(role) && rows.length > 0 && (
-          <Btn variant="secondary" onClick={() => printAllExpensesPdf(rows)}>
+          <Btn variant="secondary" onClick={() => printAllExpensesPdf(rows, token)}>
             <Printer className="h-4 w-4" /> طباعة PDF (الكل)
           </Btn>
         )}
@@ -176,7 +209,7 @@ export default function ExpensesPage() {
                     <td className="p-4">
                       {e.attachmentUrl ? (
                         <div className="flex gap-2">
-                          <button type="button" onClick={() => setPreviewUrl(uploadsUrl(e.attachmentUrl!))} className="erp-link text-xs inline-flex items-center gap-1">
+                          <button type="button" onClick={() => openPreview(e.attachmentUrl!)} disabled={previewLoading} className="erp-link text-xs inline-flex items-center gap-1">
                             <Eye className="h-3 w-3" /> معاينة
                           </button>
                         </div>
@@ -185,7 +218,7 @@ export default function ExpensesPage() {
                     <td className="p-4">
                       <div className="flex flex-wrap items-center gap-1">
                       {canPrintExpensePdf(role) && (
-                        <Btn variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => printExpensePdf(e)}>
+                        <Btn variant="ghost" className="!px-2 !py-1 text-xs" onClick={() => printExpensePdf(e, token)}>
                           <Printer className="h-3 w-3" /> PDF
                         </Btn>
                       )}
@@ -271,11 +304,12 @@ export default function ExpensesPage() {
           <Field label="التاريخ" required><Input type="date" value={form.expenseDate} onChange={(e) => setForm({ ...form, expenseDate: e.target.value })} required /></Field>
           <Field label="الوصف"><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
           <Field label="مرفق (فاتورة / سند صرف)">
-            <input type="file" accept="image/*,.pdf" onChange={onUpload} className="text-sm text-slate-400" />
+            <input type="file" accept="image/*,.pdf" onChange={onUpload} disabled={uploading} className="text-sm text-slate-400" />
+            {uploading && <p className="mt-2 text-xs text-slate-400 inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> جاري الرفع...</p>}
             {form.attachmentUrl && (
               <div className="mt-2 flex gap-2">
                 <p className="text-xs text-emerald-400">تم رفع المرفق ✓</p>
-                <button type="button" className="erp-link text-xs" onClick={() => setPreviewUrl(uploadsUrl(form.attachmentUrl))}>معاينة</button>
+                <button type="button" className="erp-link text-xs" onClick={() => openPreview(form.attachmentUrl)} disabled={previewLoading}>معاينة</button>
               </div>
             )}
           </Field>
@@ -285,9 +319,9 @@ export default function ExpensesPage() {
 
       <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={onDelete} message="هل أنت متأكد من حذف هذا المصروف؟" loading={saving} />
 
-      <Modal open={!!previewUrl} onClose={() => setPreviewUrl(null)} title="معاينة المرفق" wide>
+      <Modal open={!!previewUrl} onClose={closePreview} title="معاينة المرفق" wide>
         {previewUrl && (
-          previewUrl.toLowerCase().includes(".pdf") ? (
+          previewIsPdf ? (
             <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg border border-white/10" title="مرفق PDF" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
