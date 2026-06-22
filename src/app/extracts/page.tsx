@@ -12,6 +12,7 @@ import {
 } from "@/lib/permissions";
 import { RequireRole } from "@/components/require-role";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
+import { downloadExcel } from "@/lib/excel-export";
 import {
   Loader2, Eye, ArrowUpCircle, CheckCircle, DollarSign, Download, Plus, X,
 } from "lucide-react";
@@ -26,25 +27,23 @@ const emptyForm = () => ({
   notes: "",
 });
 
-function exportExtractsCsv(rows: Extract[]) {
-  const headers = ["رقم المستخلص", "المشروع", "المقاول", "العنوان", "التاريخ", "القيمة", "الحالة"];
-  const lines = rows.map((e) => [
-    e.extractNumber,
-    e.projectName ?? "",
-    e.contractorName ?? "",
-    e.title,
-    e.extractDate,
-    String(e.amount),
-    STATUS_LABELS[e.status] ?? e.status,
-  ]);
-  const csv = [headers, ...lines].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "المستخلصات.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+async function exportExtractsExcel(rows: Extract[]) {
+  await downloadExcel({
+    filename: "المستخلصات",
+    sheetName: "المستخلصات",
+    headers: ["رقم المستخلص", "المشروع", "المقاول", "العنوان", "التاريخ", "القيمة (ر.س)", "الحالة"],
+    rows: rows.map((e) => [
+      e.extractNumber,
+      e.projectName ?? "",
+      e.contractorName ?? "",
+      e.title,
+      e.extractDate,
+      e.amount,
+      STATUS_LABELS[e.status] ?? e.status,
+    ]),
+    currencyColumns: [6],
+    dateColumns: [5],
+  });
 }
 
 export default function ExtractsPage() {
@@ -224,7 +223,7 @@ export default function ExtractsPage() {
     <RequireRole allow={canViewExtracts}>
     <AppShell title="إدارة المستخلصات">
       <div className="mb-6 flex flex-wrap gap-3 justify-end">
-        <Btn variant="secondary" onClick={() => rows.length ? exportExtractsCsv(rows) : showToast("لا توجد بيانات")}>
+        <Btn variant="secondary" onClick={() => rows.length ? exportExtractsExcel(rows) : showToast("لا توجد بيانات")}>
           <Download className="h-4 w-4" /> تصدير Excel
         </Btn>
         {canCreate(role, "extracts") && (

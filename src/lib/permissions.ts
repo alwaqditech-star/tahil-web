@@ -49,6 +49,7 @@ export function canCreate(role: string, resource: string): boolean {
     pettyCashUse: ["project_manager", "site_supervisor", "project_engineer"],
     extracts: ["admin", "project_manager", "project_engineer"],
     contractors: ["admin", "project_manager"],
+    contracts: ["admin", "project_manager", "accountant"],
     suppliers: ["admin", "project_manager"],
     purchases: ["admin", "project_manager"],
     users: ["admin"],
@@ -65,7 +66,7 @@ export function canEdit(role: string, resource: string): boolean {
     pettyCash: ["admin", "accountant"],
     extracts: ["admin", "project_manager", "project_engineer"],
     contractors: ["admin", "project_manager"],
-    suppliers: ["admin", "project_manager"],
+    contracts: ["admin", "project_manager", "accountant"],
     purchases: ["admin", "project_manager"],
     users: ["admin"],
   };
@@ -105,7 +106,7 @@ export function canExportPdf(role: string): boolean {
 }
 
 export function canCreateTask(role: string): boolean {
-  return role === "admin" || role === "project_manager";
+  return role === "admin" || role === "project_manager" || role === "accountant";
 }
 
 export function canViewTasks(role: string): boolean {

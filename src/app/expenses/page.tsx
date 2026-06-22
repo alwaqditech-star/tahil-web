@@ -6,7 +6,7 @@ import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, FormActions, RowActions, ConfirmDialog, Btn, NumberInput } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { api, fetchAttachmentBlobUrl, type Expense, type ProjectPickerOption, type ExpenseCategory, type ContractItem } from "@/lib/api";
-import { canCreate, canEdit, canDelete, canManagerApproveExpense, canAccountantApproveExpense, canPrintExpensePdf, isFieldRole } from "@/lib/permissions";
+import { canCreate, canEdit, canDelete, canManagerApproveExpense, canAccountantApproveExpense, canPrintExpensePdf, isFieldRole, canViewFinancialData } from "@/lib/permissions";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import { printExpensePdf, printAllExpensesPdf } from "@/lib/expense-pdf";
 import { Loader2, Printer, Eye } from "lucide-react";
@@ -164,6 +164,7 @@ export default function ExpensesPage() {
 
   const role = user?.role ?? "";
   const isFieldUser = isFieldRole(role);
+  const showFinancial = canViewFinancialData(role);
 
   return (
     <AppShell title="إدارة المصروفات">
@@ -189,7 +190,7 @@ export default function ExpensesPage() {
                   <th className="text-right p-4">المشروع</th>
                   <th className="text-right p-4">النوع</th>
                   <th className="text-right p-4">الفئة</th>
-                  <th className="text-right p-4">المبلغ</th>
+                  {showFinancial && <th className="text-right p-4">المبلغ</th>}
                   <th className="text-right p-4">الحالة</th>
                   <th className="text-right p-4">التاريخ</th>
                   <th className="text-right p-4">مرفق</th>
@@ -203,7 +204,7 @@ export default function ExpensesPage() {
                     <td className="p-4 text-slate-400">{e.projectName}</td>
                     <td className="p-4 text-xs">{e.type === "general" ? "عام" : "مرتبط ببند"}</td>
                     <td className="p-4 text-slate-300">{e.category}</td>
-                    <td className="p-4 text-money-negative">{formatCurrency(e.amount)}</td>
+                    {showFinancial && <td className="p-4 text-money-negative">{formatCurrency(e.amount)}</td>}
                     <td className="p-4"><Badge variant={statusVariant(e.status)}>{STATUS_LABELS[e.status] ?? e.status}</Badge></td>
                     <td className="p-4 text-slate-500">{formatDate(e.expenseDate)}</td>
                     <td className="p-4">

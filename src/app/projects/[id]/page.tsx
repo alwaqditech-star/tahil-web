@@ -8,7 +8,7 @@ import { Modal, Btn, Field, Input, FormActions, RowActions, PageToolbar, Confirm
 import { CatalogPicker } from "@/components/catalog-picker";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type Project, type ProjectItem, type CatalogItem } from "@/lib/api";
-import { canCreate, canEdit, canDelete } from "@/lib/permissions";
+import { canCreate, canEdit, canDelete, canViewFinancialData } from "@/lib/permissions";
 import { RequireProjectsModule } from "@/components/require-projects-module";
 import { formatCurrency } from "@/lib/utils";
 import { Loader2, Upload, ArrowRight } from "lucide-react";
@@ -64,6 +64,7 @@ export default function ProjectDetailPage() {
   };
 
   const role = user?.role ?? "";
+  const showFinancial = canViewFinancialData(role);
   const totalEst = items.reduce((s, i) => s + i.totalEstimated, 0);
   const totalExec = items.reduce((s, i) => s + i.totalExecuted, 0);
 
@@ -81,11 +82,18 @@ export default function ProjectDetailPage() {
       </Link>
 
       {project && (
-        <div className="glass-card p-6 mb-6 grid md:grid-cols-4 gap-4">
+        <div className={`glass-card p-6 mb-6 grid gap-4 ${showFinancial ? "md:grid-cols-4" : "md:grid-cols-2"}`}>
           <div><p className="text-xs text-slate-500">العميل</p><p className="text-white font-semibold">{project.client}</p></div>
-          <div><p className="text-xs text-slate-500">قيمة العقد</p><p className="text-money-default">{formatCurrency(project.contractValue)}</p></div>
-          <div><p className="text-xs text-slate-500">إجمالي تقديري</p><p className="text-money-muted">{formatCurrency(totalEst)}</p></div>
-          <div><p className="text-xs text-slate-500">إجمالي منفذ</p><p className="text-money-default">{formatCurrency(totalExec)}</p></div>
+          {showFinancial && (
+            <>
+              <div><p className="text-xs text-slate-500">قيمة العقد</p><p className="text-money-default">{formatCurrency(project.contractValue)}</p></div>
+              <div><p className="text-xs text-slate-500">إجمالي تقديري</p><p className="text-money-muted">{formatCurrency(totalEst)}</p></div>
+              <div><p className="text-xs text-slate-500">إجمالي منفذ</p><p className="text-money-default">{formatCurrency(totalExec)}</p></div>
+            </>
+          )}
+          {!showFinancial && (
+            <div><p className="text-xs text-slate-500">نسبة الإنجاز</p><p className="text-white font-semibold">{project.progressPercent}%</p></div>
+          )}
         </div>
       )}
 
@@ -113,10 +121,14 @@ export default function ProjectDetailPage() {
               <th className="text-right p-4">البند</th>
               <th className="text-right p-4">الوحدة</th>
               <th className="text-right p-4">الكمية</th>
-              <th className="text-right p-4">سعر البند</th>
-              <th className="text-right p-4">التقديري</th>
-              <th className="text-right p-4">المنفذ</th>
-              <th className="text-right p-4">الفرق</th>
+              {showFinancial && (
+                <>
+                  <th className="text-right p-4">سعر البند</th>
+                  <th className="text-right p-4">التقديري</th>
+                  <th className="text-right p-4">المنفذ</th>
+                  <th className="text-right p-4">الفرق</th>
+                </>
+              )}
               <th className="text-right p-4">إجراءات</th>
             </tr>
           </thead>
@@ -126,10 +138,14 @@ export default function ProjectDetailPage() {
                 <td className="p-4 text-white">{i.name}</td>
                 <td className="p-4 text-slate-400">{i.unit}</td>
                 <td className="p-4">{i.quantity}</td>
-                <td className="p-4">{formatCurrency(i.unitPrice)}</td>
-                <td className="p-4 text-money-muted">{formatCurrency(i.totalEstimated)}</td>
-                <td className="p-4 text-money-default">{formatCurrency(i.totalExecuted)}</td>
-                <td className={`p-4 ${i.variance >= 0 ? "text-money-positive" : "text-money-negative"}`}>{formatCurrency(i.variance)}</td>
+                {showFinancial && (
+                  <>
+                    <td className="p-4">{formatCurrency(i.unitPrice)}</td>
+                    <td className="p-4 text-money-muted">{formatCurrency(i.totalEstimated)}</td>
+                    <td className="p-4 text-money-default">{formatCurrency(i.totalExecuted)}</td>
+                    <td className={`p-4 ${i.variance >= 0 ? "text-money-positive" : "text-money-negative"}`}>{formatCurrency(i.variance)}</td>
+                  </>
+                )}
                 <td className="p-4">
                   <RowActions
                     onEdit={canEdit(role, "projectItems") ? () => { setEditId(i.id); setForm({ catalogItemId: i.catalogItemId ?? "", name: i.name, unit: i.unit, unitPrice: i.unitPrice, estimatedPrice: i.estimatedPrice, executedPrice: i.executedPrice, quantity: i.quantity }); setModal(true); } : undefined}

@@ -7,7 +7,7 @@ import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Btn, Field, Input, Select, Textarea, RowActions, PageToolbar, ConfirmDialog, NumberInput } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type Project } from "@/lib/api";
-import { canCreate, canEdit, canDelete } from "@/lib/permissions";
+import { canCreate, canEdit, canDelete, canViewFinancialData } from "@/lib/permissions";
 import { RequireProjectsModule } from "@/components/require-projects-module";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
@@ -94,6 +94,7 @@ export default function ProjectsPage() {
   };
 
   const role = user?.role ?? "";
+  const showFinancial = canViewFinancialData(role);
 
   return (
     <RequireProjectsModule>
@@ -118,16 +119,23 @@ export default function ProjectsPage() {
               {p.location && <p className="text-xs text-slate-500 mb-4">{p.location}</p>}
               <div className="progress-bar mb-2"><div className="progress-bar-fill" style={{ width: `${p.progressPercent}%` }} /></div>
               <p className="text-xs text-slate-500 mb-4">إنجاز {p.progressPercent}%</p>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 rounded-lg bg-white/3">
-                  <p className="text-slate-500 text-xs">قيمة العقد</p>
-                  <p className="text-money-default">{formatCurrency(p.contractValue)}</p>
+              {showFinancial ? (
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 rounded-lg bg-white/3">
+                    <p className="text-slate-500 text-xs">قيمة العقد</p>
+                    <p className="text-money-default">{formatCurrency(p.contractValue)}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-white/3">
+                    <p className="text-slate-500 text-xs">المصروفات</p>
+                    <p className="font-bold text-rose-400">{formatCurrency(p.totalExpenses)}</p>
+                  </div>
                 </div>
-                <div className="p-3 rounded-lg bg-white/3">
-                  <p className="text-slate-500 text-xs">المصروفات</p>
-                  <p className="font-bold text-rose-400">{formatCurrency(p.totalExpenses)}</p>
+              ) : (
+                <div className="p-3 rounded-lg bg-white/3 text-sm">
+                  <p className="text-slate-500 text-xs">حالة المشروع</p>
+                  <p className="text-slate-300">متابعة الإنجاز والبنود فقط</p>
                 </div>
-              </div>
+              )}
               <div className="mt-4 pt-3 border-t border-white/5 flex justify-between items-center text-xs">
                 <div className="text-slate-500">
                   <span>البداية: {formatDate(p.startDate)}</span>

@@ -142,7 +142,7 @@ export default function ContractsPage() {
   return (
     <RequireRole allow={canViewContracts}>
     <AppShell title="عقود المقاولين">
-      {canCreate(role, "contractors") && (
+      {canCreate(role, "contracts") && (
         <div className="mb-6 flex justify-end">
           <Btn onClick={openAdd}>+ عقد جديد</Btn>
         </div>

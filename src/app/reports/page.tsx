@@ -10,6 +10,7 @@ import { CHART, ChartTooltip, formatAxisValue } from "@/components/ui/charts";
 import { useAuth } from "@/contexts/auth-context";
 import { api, type FinancialReport, type ProjectReport, type ContractorReport, type SupplierReport, type ExpenseReport, type ExpenseReportFilters, type ExtractReport, type ExtractReportFilters, type PettyCashReport, type ReportDateFilters } from "@/lib/api";
 import { formatCurrency, formatDate, STATUS_LABELS } from "@/lib/utils";
+import { downloadExcel } from "@/lib/excel-export";
 import {
   printContractorReportPdf, printExpenseReportPdf, printExtractReportPdf,
   printFinancialOverviewPdf, printPettyCashReportPdf, printEmployeePettyReportPdf, printProjectReportPdf, printSupplierReportPdf,
@@ -164,75 +165,64 @@ function ReportFiltersCard({
   );
 }
 
-function exportPettyCashCsv(rows: PettyCashReport["byEmployee"]) {
-  const headers = ["الموظف", "عدد العهد", "المخصص", "المستخدم", "المتبقي"];
-  const lines = rows.map((p) => [
-    p.name,
-    String(p.count),
-    String(p.allocated),
-    String(p.used),
-    String(p.remaining),
-  ]);
-  const csv = [headers, ...lines].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "العهد-حسب-الموظف.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+async function exportPettyCashExcel(rows: PettyCashReport["byEmployee"]) {
+  await downloadExcel({
+    filename: "العهد-حسب-الموظف",
+    sheetName: "العهد",
+    headers: ["الموظف", "عدد العهد", "المخصص (ر.س)", "المستخدم (ر.س)", "المتبقي (ر.س)"],
+    rows: rows.map((p) => [p.name, p.count, p.allocated, p.used, p.remaining]),
+    currencyColumns: [3, 4, 5],
+  });
 }
 
-function exportExtractsReportCsv(rows: ExtractReport["rows"]) {
-  const headers = ["الرقم", "التاريخ", "المشروع", "المقاول", "العنوان", "المبلغ", "الحالة"];
-  const lines = rows.map((e) => [
-    e.extractNumber,
-    e.extractDate,
-    e.projectName,
-    e.contractorName,
-    e.title,
-    String(e.amount),
-    STATUS_LABELS[e.status] ?? e.status,
-  ]);
-  const csv = [headers, ...lines].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "المستخلصات.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+async function exportExtractsReportExcel(rows: ExtractReport["rows"]) {
+  await downloadExcel({
+    filename: "تقرير-المستخلصات",
+    sheetName: "المستخلصات",
+    headers: ["رقم المستخلص", "التاريخ", "المشروع", "المقاول", "العنوان", "المبلغ (ر.س)", "الحالة"],
+    rows: rows.map((e) => [
+      e.extractNumber,
+      e.extractDate,
+      e.projectName,
+      e.contractorName,
+      e.title,
+      e.amount,
+      STATUS_LABELS[e.status] ?? e.status,
+    ]),
+    currencyColumns: [6],
+    dateColumns: [2],
+  });
 }
 
-function exportExpensesCsv(rows: ExpenseReport["rows"]) {
-  const headers = ["التاريخ", "العنوان", "المشروع", "التصنيف", "المبلغ", "الحالة", "مقدّم من"];
-  const lines = rows.map((e) => [
-    e.expenseDate,
-    e.title,
-    e.projectName,
-    e.category,
-    String(e.amount),
-    STATUS_LABELS[e.status] ?? e.status,
-    e.submittedBy,
-  ]);
-  const csv = [headers, ...lines].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "المصروفات.csv";
-  a.click();
-  URL.revokeObjectURL(url);
+async function exportExpensesExcel(rows: ExpenseReport["rows"]) {
+  await downloadExcel({
+    filename: "تقرير-المصروفات",
+    sheetName: "المصروفات",
+    headers: ["التاريخ", "العنوان", "المشروع", "التصنيف", "المبلغ (ر.س)", "الحالة", "مقدّم من"],
+    rows: rows.map((e) => [
+      e.expenseDate,
+      e.title,
+      e.projectName,
+      e.category,
+      e.amount,
+      STATUS_LABELS[e.status] ?? e.status,
+      e.submittedBy,
+    ]),
+    currencyColumns: [5],
+    dateColumns: [1],
+  });
 }
 
 function DataTable({
   headers,
   rows,
   empty,
+  footerRow,
 }: {
   headers: string[];
   rows: React.ReactNode[][];
   empty: string;
+  footerRow?: React.ReactNode[];
 }) {
   if (rows.length === 0) {
     return <p className="py-10 text-center text-sm text-slate-500">{empty}</p>;
@@ -256,6 +246,15 @@ function DataTable({
             </tr>
           ))}
         </tbody>
+        {footerRow && (
+          <tfoot>
+            <tr className="border-t-2 border-[var(--brand)]/30 bg-white/5 font-semibold">
+              {footerRow.map((cell, j) => (
+                <td key={j} className="px-3 py-3 text-white">{cell}</td>
+              ))}
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );
@@ -517,6 +516,21 @@ export default function ReportsPage() {
       matchesSearch(`${e.extractNumber} ${e.title ?? ""} ${e.projectName} ${e.contractorName}`, rowSearchName),
     );
   }, [extractReport, rowSearchName]);
+
+  const filteredExpenseTotal = useMemo(
+    () => filteredExpenseRows.reduce((s, e) => s + e.amount, 0),
+    [filteredExpenseRows],
+  );
+  const filteredExtractTotal = useMemo(
+    () => filteredExtractRows.reduce((s, e) => s + e.amount, 0),
+    [filteredExtractRows],
+  );
+  const filteredPettyTotals = useMemo(() => ({
+    allocated: filteredPettyEmployees.reduce((s, e) => s + e.allocated, 0),
+    used: filteredPettyEmployees.reduce((s, e) => s + e.used, 0),
+    remaining: filteredPettyEmployees.reduce((s, e) => s + e.remaining, 0),
+    count: filteredPettyEmployees.reduce((s, e) => s + e.count, 0),
+  }), [filteredPettyEmployees]);
 
   return (
     <RequireRole allow={canViewReports}>
@@ -1344,8 +1358,8 @@ export default function ReportsPage() {
           {!expenseLoading && expenseReport && (
             <>
               <div className="mb-6 grid gap-4 sm:grid-cols-3">
-                <StatCard title="عدد العمليات" value={expenseReport.summary.transactionsCount} icon={Hash} accent="default" />
-                <StatCard title="إجمالي المصروفات" value={formatCurrency(expenseReport.summary.totalAmount)} icon={Receipt} accent="danger" valueTone="negative" />
+                <StatCard title="عدد العمليات" value={filteredExpenseRows.length} icon={Hash} accent="default" />
+                <StatCard title="إجمالي المصروفات" value={formatCurrency(filteredExpenseTotal)} icon={Receipt} accent="danger" valueTone="negative" />
                 <StatCard title="عدد التصنيفات" value={expenseReport.summary.categoriesCount} icon={Layers} accent="info" />
               </div>
 
@@ -1366,7 +1380,7 @@ export default function ReportsPage() {
                 action={
                   <ExportActions
                     disabled={filteredExpenseRows.length === 0}
-                    onCsv={() => exportExpensesCsv(filteredExpenseRows)}
+                    onCsv={() => exportExpensesExcel(filteredExpenseRows)}
                     onPdf={() => expenseReport && printExpenseReportPdf({ ...expenseReport, rows: filteredExpenseRows })}
                   />
                 }
@@ -1382,6 +1396,9 @@ export default function ReportsPage() {
                     <span key="amt" className="tabular-nums text-money-negative">{formatCurrency(e.amount)}</span>,
                     <Badge key="st" variant={statusVariant(e.status)}>{STATUS_LABELS[e.status] ?? e.status}</Badge>,
                   ])}
+                  footerRow={filteredExpenseRows.length > 0 ? [
+                    "الإجمالي", "", "", "", formatCurrency(filteredExpenseTotal), `${filteredExpenseRows.length} عملية`,
+                  ] : undefined}
                 />
               </PanelCard>
             </>
@@ -1415,8 +1432,8 @@ export default function ReportsPage() {
           {!extractLoading && extractReport && (
             <>
               <div className="mb-6 grid gap-4 sm:grid-cols-2">
-                <StatCard title="عدد المستخلصات" value={extractReport.summary.extractsCount} icon={FileText} accent="default" />
-                <StatCard title="إجمالي المبلغ" value={formatCurrency(extractReport.summary.totalAmount)} icon={TrendingUp} accent="success" valueTone="positive" />
+                <StatCard title="عدد المستخلصات" value={filteredExtractRows.length} icon={FileText} accent="default" />
+                <StatCard title="إجمالي المبلغ" value={formatCurrency(filteredExtractTotal)} icon={TrendingUp} accent="success" valueTone="positive" />
               </div>
 
               <PanelCard
@@ -1424,7 +1441,7 @@ export default function ReportsPage() {
                 action={
                   <ExportActions
                     disabled={filteredExtractRows.length === 0}
-                    onCsv={() => exportExtractsReportCsv(filteredExtractRows)}
+                    onCsv={() => exportExtractsReportExcel(filteredExtractRows)}
                     onPdf={() => extractReport && printExtractReportPdf({ ...extractReport, rows: filteredExtractRows })}
                   />
                 }
@@ -1437,9 +1454,12 @@ export default function ReportsPage() {
                     formatDate(e.extractDate),
                     e.projectName,
                     e.contractorName,
-                    <span key="amt" className="tabular-nums text-money-positive">{formatCurrency(e.amount)}</span>,
+                    <span key="amt" className="tabular-nums">{formatCurrency(e.amount)}</span>,
                     <Badge key="st" variant={statusVariant(e.status)}>{STATUS_LABELS[e.status] ?? e.status}</Badge>,
                   ])}
+                  footerRow={filteredExtractRows.length > 0 ? [
+                    "الإجمالي", "", "", "", formatCurrency(filteredExtractTotal), `${filteredExtractRows.length} مستخلص`,
+                  ] : undefined}
                 />
               </PanelCard>
             </>
@@ -1473,10 +1493,10 @@ export default function ReportsPage() {
           {!pettyLoading && pettyReport && (
             <>
               <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard title="إجمالي المتبقي" value={formatCurrency(pettyReport.summary.totalRemaining)} icon={TrendingUp} accent="success" valueTone="positive" />
-                <StatCard title="إجمالي المستخدم" value={formatCurrency(pettyReport.summary.totalUsed)} icon={TrendingDown} accent="danger" valueTone="negative" />
-                <StatCard title="إجمالي المخصص" value={formatCurrency(pettyReport.summary.totalAllocated)} subtitle={`${filteredPettyEmployees.length} موظف`} icon={DollarSign} accent="brand" />
-                <StatCard title="عدد العمليات" value={pettyReport.summary.transactionCount} subtitle="سجل عهد" icon={Wallet} accent="warning" />
+                <StatCard title="إجمالي المتبقي" value={formatCurrency(filteredPettyTotals.remaining)} icon={TrendingUp} accent="success" valueTone="positive" />
+                <StatCard title="إجمالي المستخدم" value={formatCurrency(filteredPettyTotals.used)} icon={TrendingDown} accent="danger" valueTone="negative" />
+                <StatCard title="إجمالي المخصص" value={formatCurrency(filteredPettyTotals.allocated)} subtitle={`${filteredPettyEmployees.length} موظف`} icon={DollarSign} accent="brand" />
+                <StatCard title="عدد العهد" value={filteredPettyTotals.count} subtitle="سجل عهد" icon={Wallet} accent="warning" />
               </div>
 
               <PanelCard
@@ -1484,7 +1504,7 @@ export default function ReportsPage() {
                 action={
                   <ExportActions
                     disabled={filteredPettyEmployees.length === 0}
-                    onCsv={() => exportPettyCashCsv(filteredPettyEmployees)}
+                    onCsv={() => exportPettyCashExcel(filteredPettyEmployees)}
                     onPdf={() => printPettyCashReportPdf(pettyReport)}
                   />
                 }
