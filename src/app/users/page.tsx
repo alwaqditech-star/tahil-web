@@ -1,62 +1,177 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge, statusVariant } from "@/components/ui/badge";
 import { Modal, Field, Input, Select, FormActions, RowActions, PageToolbar, ConfirmDialog } from "@/components/crud/ui";
 import { useAuth } from "@/contexts/auth-context";
-import { api, type UserRow } from "@/lib/api";
+import { api, type UserRow, type ProjectPickerOption } from "@/lib/api";
 import { canCreate, canEdit, canDelete } from "@/lib/permissions";
 import { ROLE_LABELS } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
-const empty = () => ({ name: "", email: "", username: "", password: "", role: "project_manager", department: "", isActive: true });
+type UserForm = {
+  name: string;
+  email: string;
+  username: string;
+  password: string;
+  role: string;
+  department: string;
+  isActive: boolean;
+  assignedProjectId: number;
+  assignedProjectIds: number[];
+};
+
+const empty = (): UserForm => ({
+  name: "",
+  email: "",
+  username: "",
+  password: "",
+  role: "project_manager",
+  department: "",
+  isActive: true,
+  assignedProjectId: 0,
+  assignedProjectIds: [],
+});
+
+const FIELD_PROJECT_ROLES = new Set(["site_supervisor", "project_engineer"]);
+
+function needsMultipleProjects(role: string) {
+  return role === "project_manager";
+}
+
+function needsSingleProject(role: string) {
+  return FIELD_PROJECT_ROLES.has(role);
+}
 
 export default function UsersPage() {
   const { token, user } = useAuth();
   const [rows, setRows] = useState<UserRow[]>([]);
+  const [projects, setProjects] = useState<ProjectPickerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState(empty());
+  const [form, setForm] = useState<UserForm>(empty());
   const [editId, setEditId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const projectNames = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const p of projects) map.set(p.id, p.name);
+    return map;
+  }, [projects]);
+
   const load = useCallback(() => {
     if (!token) return;
     setLoading(true);
-    api.users(token).list().then(setRows).catch(console.error).finally(() => setLoading(false));
+    Promise.all([api.users(token).list(), api.projects(token).picker()])
+      .then(([users, proj]) => {
+        setRows(users);
+        setProjects(proj);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
 
-  const openAdd = () => { setEditId(null); setForm(empty()); setError(null); setModal(true); };
+  const formatUserProjects = (u: UserRow) => {
+    if (u.role === "project_manager") {
+      const ids = u.assignedProjectIds ?? [];
+      if (ids.length === 0) return "—";
+      return ids.map((id) => projectNames.get(id) ?? `#${id}`).join("، ");
+    }
+    if (needsSingleProject(u.role)) {
+      return u.assignedProjectId ? (projectNames.get(u.assignedProjectId) ?? `#${u.assignedProjectId}`) : "—";
+    }
+    return "—";
+  };
+
+  const openAdd = () => {
+    setEditId(null);
+    setForm(empty());
+    setError(null);
+    setModal(true);
+  };
+
   const openEdit = (u: UserRow) => {
     setEditId(u.id);
-    setForm({ name: u.name, email: u.email, username: u.username ?? "", password: "", role: u.role, department: u.department ?? "", isActive: u.isActive });
-    setError(null); setModal(true);
+    setForm({
+      name: u.name,
+      email: u.email,
+      username: u.username ?? "",
+      password: "",
+      role: u.role,
+      department: u.department ?? "",
+      isActive: u.isActive,
+      assignedProjectId: u.assignedProjectId ?? 0,
+      assignedProjectIds: u.assignedProjectIds ?? [],
+    });
+    setError(null);
+    setModal(true);
+  };
+
+  const onRoleChange = (role: string) => {
+    setForm((prev) => ({
+      ...prev,
+      role,
+      assignedProjectId: needsSingleProject(role) ? prev.assignedProjectId : 0,
+      assignedProjectIds: needsMultipleProjects(role) ? prev.assignedProjectIds : [],
+    }));
+  };
+
+  const toggleProject = (projectId: number, checked: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      assignedProjectIds: checked
+        ? [...prev.assignedProjectIds, projectId]
+        : prev.assignedProjectIds.filter((id) => id !== projectId),
+    }));
   };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
-    setSaving(true); setError(null);
+    setSaving(true);
+    setError(null);
     try {
-      const body = { ...form, password: form.password || undefined };
+      const body = {
+        name: form.name,
+        email: form.email,
+        username: form.username,
+        password: form.password || undefined,
+        role: form.role,
+        department: form.department,
+        isActive: form.isActive,
+        assignedProjectId: needsSingleProject(form.role) && form.assignedProjectId > 0
+          ? form.assignedProjectId
+          : null,
+        assignedProjectIds: needsMultipleProjects(form.role) ? form.assignedProjectIds : [],
+      };
       if (editId) await api.users(token).update(editId, body);
       else await api.users(token).create(body);
-      setModal(false); load();
-    } catch (err) { setError(err instanceof Error ? err.message : "خطأ"); }
-    finally { setSaving(false); }
+      setModal(false);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "خطأ");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const onDelete = async () => {
     if (!token || !deleteId) return;
     setSaving(true);
-    try { await api.users(token).remove(deleteId); setDeleteId(null); load(); }
-    catch (err) { alert(err instanceof Error ? err.message : "خطأ"); }
-    finally { setSaving(false); }
+    try {
+      await api.users(token).remove(deleteId);
+      setDeleteId(null);
+      load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "خطأ");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const role = user?.role ?? "";
@@ -76,6 +191,7 @@ export default function UsersPage() {
                   <th className="text-right p-4">البريد</th>
                   <th className="text-right p-4">اسم المستخدم</th>
                   <th className="text-right p-4">الدور</th>
+                  <th className="text-right p-4">المشاريع المسندة</th>
                   <th className="text-right p-4">القسم</th>
                   <th className="text-right p-4">الحالة</th>
                   <th className="text-right p-4">إجراءات</th>
@@ -88,6 +204,7 @@ export default function UsersPage() {
                     <td className="p-4 text-slate-400">{u.email}</td>
                     <td className="p-4 text-sky-400 font-mono">{u.username}</td>
                     <td className="p-4"><Badge variant="info">{ROLE_LABELS[u.role] ?? u.role}</Badge></td>
+                    <td className="p-4 text-slate-300 max-w-xs">{formatUserProjects(u)}</td>
                     <td className="p-4 text-slate-500">{u.department ?? "—"}</td>
                     <td className="p-4"><Badge variant={u.isActive ? statusVariant("active") : statusVariant("inactive")}>{u.isActive ? "نشط" : "معطّل"}</Badge></td>
                     <td className="p-4">
@@ -112,7 +229,7 @@ export default function UsersPage() {
               <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editId} />
             </Field>
             <Field label="الدور">
-              <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+              <Select value={form.role} onChange={(e) => onRoleChange(e.target.value)}>
                 <option value="admin">مدير النظام</option>
                 <option value="project_manager">مدير مشاريع</option>
                 <option value="accountant">محاسب</option>
@@ -123,9 +240,52 @@ export default function UsersPage() {
             <Field label="القسم"><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} /></Field>
             <Field label="الحالة">
               <Select value={form.isActive ? "true" : "false"} onChange={(e) => setForm({ ...form, isActive: e.target.value === "true" })}>
-                <option value="true">نشط</option><option value="false">معطّل</option>
+                <option value="true">نشط</option>
+                <option value="false">معطّل</option>
               </Select>
             </Field>
+
+            {needsMultipleProjects(form.role) && (
+              <div className="col-span-2">
+                <Field label="المشاريع المسندة">
+                {projects.length === 0 ? (
+                  <p className="text-sm text-slate-500">لا توجد مشاريع</p>
+                ) : (
+                  <div className="max-h-44 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
+                    {projects.map((p) => (
+                      <label key={p.id} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:text-white">
+                        <input
+                          type="checkbox"
+                          className="rounded border-white/20"
+                          checked={form.assignedProjectIds.includes(p.id)}
+                          onChange={(e) => toggleProject(p.id, e.target.checked)}
+                        />
+                        {p.name}
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-1 text-xs text-slate-500">يمكن إسناد أكثر من مشروع لمدير المشاريع</p>
+                </Field>
+              </div>
+            )}
+
+            {needsSingleProject(form.role) && (
+              <div className="col-span-2">
+                <Field label="المشروع المسند">
+                <Select
+                  value={form.assignedProjectId || ""}
+                  onChange={(e) => setForm({ ...form, assignedProjectId: Number(e.target.value) || 0 })}
+                >
+                  <option value="">— اختر مشروع —</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </Select>
+                <p className="mt-1 text-xs text-slate-500">مشرف الموقع ومهندس المشروع يرتبطان بمشروع واحد</p>
+                </Field>
+              </div>
+            )}
           </div>
           <FormActions onCancel={() => setModal(false)} loading={saving} />
         </form>

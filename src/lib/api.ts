@@ -133,6 +133,8 @@ export type Purchase = {
 export type UserRow = {
   id: number; name: string; email: string; username: string | null;
   role: string; department: string | null; isActive: boolean;
+  assignedProjectId?: number | null;
+  assignedProjectIds?: number[];
 };
 
 export type ExpenseCategory = { id: number; name: string };
